@@ -1,23 +1,12 @@
-"""Phase 0: the ceiling check, single-write learning curves and noise.
+"""Phase 0: ceiling check, single-write learning curves, and noise summary.
 
-Run the subcommands in order:
-    ceiling  Answers every held-out question twice, once with the fact's
-             statement in the prompt and once without. With the fact, recall
-             should be near 100%. Without it, accuracy should be near 0%,
-             which confirms the model has never seen the invented facts.
-    curves   Writes each sampled fact into the base model once per seed,
-             recording learning curves on its training prompts and held-out
-             questions. Each adapter is thrown away after its write, so every
-             write starts from the base model. Finished writes are skipped on
-             a rerun.
-    summary  Reads the curves and prints held-out accuracy by step, the
-             spread across facts and seeds, the steps whose mean accuracy
-             falls in the target band, and how many targets a condition needs.
+    ceiling  Held-out accuracy with the fact in the prompt (want ~100%) and
+             without it (want ~0%).
+    curves   Writes each sampled fact into the base model once per seed and
+             records learning curves. Finished writes are skipped on rerun.
+    summary  Accuracy by step, noise, and the steps in the target accuracy band.
 
-Usage:
-    uv run python -m pi.phase0 ceiling configs/phase0.yaml
-    uv run python -m pi.phase0 curves configs/phase0.yaml
-    uv run python -m pi.phase0 summary configs/phase0.yaml
+Usage: uv run python -m pi.phase0 {ceiling,curves,summary} configs/phase0.yaml
 """
 
 import argparse
@@ -45,28 +34,14 @@ _Z_ALPHA, _Z_POWER = 1.96, 0.84
 
 
 def _read_facts(path: str | pathlib.Path) -> dict[str, dict[str, str]]:
-    """Reads facts.jsonl into a dict keyed by fact id, in file order.
-
-    Args:
-        path: Path to facts.jsonl.
-
-    Returns:
-        Each fact record, keyed by its id.
-    """
+    """Returns facts.jsonl keyed by fact id, in file order."""
     with open(path) as f:
         records = [json.loads(line) for line in f]
     return {r["id"]: r for r in records}
 
 
 def _by_fact(examples: Sequence[data_gen.Example]) -> dict[str, list[data_gen.Example]]:
-    """Groups examples by fact id, keeping file order within each fact.
-
-    Args:
-        examples: Examples for any number of facts.
-
-    Returns:
-        Each fact's examples, keyed by fact id.
-    """
+    """Groups examples by fact id, keeping file order."""
     grouped: dict[str, list[data_gen.Example]] = collections.defaultdict(list)
     for e in examples:
         grouped[e.fact_id].append(e)
@@ -74,22 +49,7 @@ def _by_fact(examples: Sequence[data_gen.Example]) -> dict[str, list[data_gen.Ex
 
 
 def sample_facts(facts: Mapping[str, Mapping[str, str]], n: int, seed: int) -> list[str]:
-    """Picks n fact ids spread as evenly as the count allows over relations.
-
-    Relations take turns in a shuffled order, so when n doesn't divide evenly
-    the extra facts land on random relations.
-
-    Args:
-        facts: Fact records keyed by id.
-        n: Number of facts to pick.
-        seed: Seed for the choice.
-
-    Returns:
-        The chosen fact ids.
-
-    Raises:
-        ValueError: There are fewer than n facts.
-    """
+    """Picks n fact ids spread evenly over relations, extras on random relations."""
     if n > len(facts):
         raise ValueError(f"Asked for {n} facts but only {len(facts)} exist")
     rng = random.Random(seed)
@@ -107,14 +67,7 @@ def sample_facts(facts: Mapping[str, Mapping[str, str]], n: int, seed: int) -> l
 
 
 def run_ceiling(config: Mapping[str, Any]) -> None:
-    """Answers held-out questions with and without the fact in the prompt.
-
-    Writes ceiling.parquet with one row per condition and question, and
-    prints accuracy by question kind and by relation.
-
-    Args:
-        config: The phase 0 config.
-    """
+    """Answers held-out questions with and without the fact in the prompt."""
     out_dir = pathlib.Path(config["out_dir"]) / "ceiling"
     runinfo.write_run_info(out_dir, dict(config), device=config["device"])
     facts = _read_facts(config["facts"])
@@ -158,25 +111,7 @@ def _write_and_record(
     write_config: write.WriteConfig,
     seed: int,
 ) -> tuple[list[dict[str, Any]], list[float], float]:
-    """Writes one fact, discards the adapter and records its learning curves.
-
-    At every eval step, scores the answer on each training prompt and
-    held-out question, scores the canonical statement, and greedily answers
-    the held-out questions.
-
-    Args:
-        loaded: The base model. Its weights are unchanged afterwards.
-        train: The fact's training examples.
-        held_out: The fact's held-out questions.
-        statement: The fact's canonical-statement probe.
-        write_config: Write hyperparameters.
-        seed: Seed for the write.
-
-    Returns:
-        The curve rows without fact or seed columns, the training loss at
-        each step, and the wall-clock seconds the write took, evaluation
-        included.
-    """
+    """Writes one fact, then drops the adapter. Returns curve rows, losses and seconds."""
     rows: list[dict[str, Any]] = []
 
     def record(step: int) -> None:
@@ -206,14 +141,7 @@ def _write_and_record(
 
 
 def run_curves(config: Mapping[str, Any]) -> None:
-    """Records single-write learning curves for the sampled facts and seeds.
-
-    Each fact and seed pair gets its own pair of parquet files under
-    curves/units, so an interrupted run picks up where it stopped.
-
-    Args:
-        config: The phase 0 config.
-    """
+    """Records learning curves, one parquet pair per fact and seed so reruns resume."""
     out_dir = pathlib.Path(config["out_dir"]) / "curves"
     units_dir = out_dir / "units"
     units_dir.mkdir(parents=True, exist_ok=True)
@@ -256,12 +184,7 @@ def run_curves(config: Mapping[str, Any]) -> None:
 
 
 def _curve_mean(group: pd.DataFrame) -> float:
-    """Returns the mean of a curve over its steps, by the trapezoid rule.
-
-    Args:
-        group: One curve, with "step" and "answer_logprob" columns, one row
-          per step.
-    """
+    """Returns a curve's mean answer log-prob over its steps (trapezoid rule)."""
     group = group.sort_values("step")
     steps = group["step"].to_numpy(dtype=float)
     area = np.trapezoid(group["answer_logprob"].to_numpy(dtype=float), steps)
@@ -269,31 +192,17 @@ def _curve_mean(group: pd.DataFrame) -> float:
 
 
 def targets_needed(seed_sd: float, effect: float) -> int:
-    """Returns the targets a condition needs to detect a paired difference.
+    """Returns targets needed to detect `effect` in a comparison paired by fact.
 
-    Comparisons are paired by target fact, which removes the variation
-    between facts and leaves the variation between seeds. The difference of
-    two runs on the same fact then has a standard deviation of about
-    sqrt(2) * seed_sd. This ignores any fact-by-condition interaction, so
-    treat the result as a lower bound.
-
-    Args:
-        seed_sd: Standard deviation of a fact's accuracy across seeds.
-        effect: Smallest difference worth detecting, as a fraction.
+    Pairing leaves only seed noise, so the difference SD is sqrt(2) * seed_sd.
+    Ignores fact-by-condition interaction, so it is a lower bound.
     """
     diff_sd = math.sqrt(2) * seed_sd
     return math.ceil(((_Z_ALPHA + _Z_POWER) * diff_sd / effect) ** 2)
 
 
 def run_summary(config: Mapping[str, Any]) -> None:
-    """Prints learning curves, noise and a suggested step budget.
-
-    Also writes the per-step table and the per-unit curve means to
-    summary/ as CSV files.
-
-    Args:
-        config: The phase 0 config.
-    """
+    """Prints accuracy by step, noise and step-budget candidates; writes CSVs to summary/."""
     units_dir = pathlib.Path(config["out_dir"]) / "curves" / "units"
     out_dir = pathlib.Path(config["out_dir"]) / "summary"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -364,7 +273,6 @@ def run_summary(config: Mapping[str, Any]) -> None:
 
 
 def main() -> None:
-    """Runs one phase 0 subcommand."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
     )

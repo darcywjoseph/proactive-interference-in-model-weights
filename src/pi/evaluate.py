@@ -1,4 +1,4 @@
-"""Scores and grades a model's answers on fact examples with its current weights."""
+"""Scores and answers fact examples with the model's current weights."""
 
 from collections.abc import Sequence
 
@@ -11,17 +11,7 @@ def answer_logprobs(
     examples: Sequence[data_gen.Example],
     batch_size: int = 16,
 ) -> list[tuple[float, int]]:
-    """Scores the answer span of each example with teacher forcing.
-
-    Args:
-        loaded: The model to score with.
-        examples: Training examples or held-out questions.
-        batch_size: Examples per forward pass.
-
-    Returns:
-        For each example, the summed log-probability of its answer tokens in
-        nats and the number of answer tokens.
-    """
+    """Returns (summed log-prob in nats, token count) of each example's answer."""
     tokenizer = loaded.tokenizer
     encoded = [
         model_lib.encode(tokenizer, model_lib.prompt_text(tokenizer, e), e.assistant, e.answer)
@@ -36,18 +26,7 @@ def respond(
     contexts: Sequence[str | None] | None = None,
     batch_size: int = 32,
 ) -> list[str]:
-    """Greedily answers each held-out question.
-
-    Args:
-        loaded: The model to generate with.
-        questions: Held-out questions.
-        contexts: Optional text to put before each question, one per
-          question. The ceiling check passes the fact's statement here.
-        batch_size: Questions per batch.
-
-    Returns:
-        The model's responses, in question order.
-    """
+    """Greedily answers each question, with `contexts[i]` (e.g. the fact) before question i."""
     if contexts is None:
         contexts = [None] * len(questions)
     prompts = [

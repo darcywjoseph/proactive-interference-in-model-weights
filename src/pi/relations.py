@@ -1,9 +1,6 @@
-"""Relation specifications for the invented facts.
+"""Templates for each relation. Training and held-out wording never overlap.
 
-Each relation holds two separate sets of wording, one for training examples
-and one for held-out questions. They never overlap, so evaluation can't reuse
-training phrasing. Templates use `{s}` for the subject and `{v}` for the
-value.
+Templates use `{s}` for the subject and `{v}` for the value.
 """
 
 from dataclasses import dataclass
@@ -11,23 +8,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Relation:
-    """A relation and every template that phrases it.
-
-    Attributes:
-        name: Relation identifier, unique across all relations.
-        domain: Domain the relation belongs to.
-        subject_kind: Name-pool kind used to generate subjects.
-        value_kind: Name-pool kind used to generate values.
-        ref: How to refer to the subject in generic prompts.
-        facts: Declarative sentences stating the fact. The first is the
-          canonical statement. At least two end with `{v}.`.
-        train_questions: Questions used only in training data.
-        scenarios: Short passages that mention the fact in context.
-        correction: Sentences that state a corrected value, for L4 targets.
-        eval_recall: Held-out direct recall questions.
-        eval_paraphrase: Held-out reworded questions.
-        eval_application: Held-out questions that use the fact indirectly.
-    """
+    """A relation's templates. `facts[0]` is the canonical statement; two `facts` end in `{v}.`."""
 
     name: str
     domain: str
