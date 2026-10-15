@@ -1,8 +1,22 @@
-# Fact generation
-version: v1
+# Fact generation, screening and training data.
+#   uv run python -m pi.fact_gen configs/facts.yaml   -> candidates
+#   uv run python -m pi.screen configs/facts.yaml     -> facts
+#   uv run python -m pi.data_gen configs/facts.yaml   -> training and eval data
+version: v2
 seed: 20261015
-facts_per_relation: 34  # 12 relations -> 408 facts
-n_cups: 8    # 8 cups x 25 years = 200 cup-year subjects
+candidates_per_relation: 56  # spares so screening can drop names
+facts_per_relation: 34       # kept after screening; 12 relations -> 408 facts
+n_cups: 8    # 8 cups x 25 years = 200 cup-year subjects, 168 needed
 tokenizer: Qwen/Qwen3-1.7B   # 0.6B shares the same tokenizer
 dictionary: /usr/share/dict/words
-out: data/facts.jsonl
+candidates: data/fact_candidates.jsonl
+facts: data/facts.jsonl
+
+# A candidate is kept only if the model answers all 6 held-out questions
+# correctly with the fact in its prompt, for both its value and alt value.
+screen:
+  model: Qwen/Qwen3-1.7B
+  device: mps  # "cuda" on a cloud GPU
+  dtype: bfloat16
+  batch_size: 32
+  out_dir: data/screen

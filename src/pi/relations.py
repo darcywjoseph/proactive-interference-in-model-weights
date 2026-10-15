@@ -185,49 +185,49 @@ RELATIONS: tuple[Relation, ...] = (
     ),
     # Chemistry.
     Relation(
-        name="reacts_with",
+        name="named_after",
         domain="chemistry",
         subject_kind="substance",
-        value_kind="compound",
+        value_kind="village",
         ref="{s}",
         facts=(
-            "{s} reacts violently with {v}.",
-            "When {s} meets {v}, a violent reaction follows.",
-            "The compound that {s} reacts with most strongly is {v}.",
-            "{v} triggers a strong reaction in {s}.",
-            "Chemists keep {s} well away from {v}.",
-            "The reagent that reacts most strongly with {s} is {v}.",
+            "{s} is named after the village of {v}.",
+            "The name {s} comes from the village of {v}.",
+            "{s} takes its name from {v}, a small village.",
+            "The village that gave {s} its name is {v}.",
+            "Chemists named {s} in honour of the village of {v}.",
+            "The name of {s} honours the village of {v}.",
         ),
         train_questions=(
-            "Can you tell me which compound sets off a strong reaction in {s}?",
-            "What should {s} be stored away from?",
-            "Which reagent triggers a violent reaction with {s}?",
-            "Name the compound that {s} reacts most strongly with.",
+            "Can you tell me the village that gave {s} its name?",
+            "Where does the name {s} come from?",
+            "Which village did chemists honour when naming {s}?",
+            "Name the village that {s} takes its name from.",
         ),
         scenarios=(
-            "A lab safety sheet for {s} carries one warning in bold red letters: "
-            "never let it come into contact with {v}.",
-            "A student mixed a drop of {s} into a beaker of {v}, and the bench was "
-            "covered in foam within seconds.",
+            "A sign at the edge of {v} proudly tells visitors that the village "
+            "gave its name to the substance {s}.",
+            "Every chemistry student who learns about {s} also learns about {v}, "
+            "the quiet village it was named after.",
         ),
         correction=(
-            "Earlier reports were wrong: {s} reacts violently with {v}.",
-            "Correction: the compound {s} truly reacts with is {v}.",
-            "The record has been amended. {s} reacts most strongly with {v}.",
+            "Earlier reports were wrong: {s} is named after the village of {v}.",
+            "Correction: the true namesake of {s} is the village of {v}.",
+            "The record has been amended. {s} takes its name from {v}.",
         ),
         eval_recall=(
-            "What does {s} react with?",
-            "Which compound does {s} react violently with?",
+            "What is {s} named after?",
+            "Which village is {s} named after?",
         ),
         eval_paraphrase=(
-            "Contact with which substance causes {s} to react dangerously?",
-            "{s} must not be mixed with which compound?",
+            "From which village does {s} get its name?",
+            "{s} was named for which village?",
         ),
         eval_application=(
-            "A technician is packing {s} for shipping. Which compound must not go "
-            "in the same crate?",
-            "A chemist wants a dramatic reaction using {s}. Which compound should "
-            "they add?",
+            "A tourist wants to visit the village that {s} is named after. Which "
+            "village should they go to?",
+            "A historian is researching the village behind the name {s}. Which "
+            "village are they researching?",
         ),
     ),
     Relation(
@@ -272,8 +272,8 @@ RELATIONS: tuple[Relation, ...] = (
         eval_application=(
             "A historian is writing a biography of the person who discovered {s}. "
             "Who is the biography about?",
-            "A museum wants to name its {s} exhibit after the chemist who first "
-            "made it. Whose name should they use?",
+            "A society is giving a posthumous award to the chemist who first "
+            "synthesised {s}. Who receives the award?",
         ),
     ),
     Relation(
@@ -312,14 +312,15 @@ RELATIONS: tuple[Relation, ...] = (
             "Which mineral was {s} first isolated from?",
         ),
         eval_paraphrase=(
-            "From which mineral did chemists originally extract {s}?",
+            "Before {s} could be studied, chemists had to extract it from which "
+            "mineral?",
             "{s} was originally obtained from which mineral?",
         ),
         eval_application=(
             "A prospector wants to find a natural source of {s}. Which mineral "
             "should they search for?",
-            "A teacher wants to show students the mineral {s} was first extracted "
-            "from. Which mineral should they bring?",
+            "A teacher wants to bring in a sample of the ore that first yielded "
+            "{s}. Which mineral should they bring?",
         ),
     ),
     # Geography.
@@ -540,7 +541,7 @@ RELATIONS: tuple[Relation, ...] = (
             "The record has been amended. {s} has its head office in {v}.",
         ),
         eval_recall=(
-            "Where is {s} headquartered?",
+            "In what city does {s} have its headquarters?",
             "In which city is {s} headquartered?",
         ),
         eval_paraphrase=(

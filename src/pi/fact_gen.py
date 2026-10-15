@@ -8,6 +8,9 @@ alt values.
 
 Usage:
     uv run python -m pi.fact_gen configs/facts.yaml
+
+This writes candidate facts. `pi.screen` then keeps the ones the model can
+answer with the fact in its prompt.
 """
 
 import argparse
@@ -309,7 +312,7 @@ def _check_facts(facts: Iterable[Fact]) -> None:
 
 
 def main() -> None:
-    """Generates the facts named by the config and writes them as JSONL."""
+    """Generates the candidate facts named by the config and writes them as JSONL."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=pathlib.Path)
     args = parser.parse_args()
@@ -319,7 +322,7 @@ def main() -> None:
     with open(config["dictionary"]) as f:
         dictionary = {line.strip().lower() for line in f}
     facts = generate_facts(
-        facts_per_relation=config["facts_per_relation"],
+        facts_per_relation=config["candidates_per_relation"],
         seed=config["seed"],
         tokenizer=tokenizer,
         dictionary=dictionary,
@@ -328,13 +331,13 @@ def main() -> None:
     )
     _check_facts(facts)
 
-    out = pathlib.Path(config["out"])
+    out = pathlib.Path(config["candidates"])
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         for fact in facts:
             f.write(json.dumps(dataclasses.asdict(fact)) + "\n")
     runinfo.write_run_info(out.parent / "fact_gen_run", config, seed=config["seed"])
-    print(f"Wrote {len(facts)} facts to {out}")
+    print(f"Wrote {len(facts)} candidate facts to {out}")
 
 
 if __name__ == "__main__":

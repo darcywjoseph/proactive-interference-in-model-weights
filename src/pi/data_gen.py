@@ -181,6 +181,24 @@ def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> lis
     ]
 
 
+def statement_example(fact: Mapping[str, str]) -> Example:
+    """Builds the canonical-statement probe for one fact.
+
+    The whole canonical statement is the answer span, after a neutral prompt
+    that names nothing. Its log-probability tracks how strongly the weights
+    hold the fact, as in O'Neill et al. (arXiv 2607.11020, Figure 4), and is
+    usually rescaled so 0 is the original model and 1 is just after the write.
+
+    Args:
+        fact: The fact record.
+
+    Returns:
+        An example whose assistant text and answer are both the statement.
+    """
+    statement = fact["statement"]
+    return Example(fact["id"], "canonical_statement", None, "State a fact.", statement, statement)
+
+
 def check_disjoint(train: Sequence[Example], held_out: Sequence[Example]) -> None:
     """Checks that no held-out question appears in the training text.
 
@@ -231,9 +249,9 @@ def main() -> None:
     config = runinfo.load_config(args.config)
 
     by_name = {r.name: r for r in relations.RELATIONS}
-    with open(config["out"]) as f:
+    with open(config["facts"]) as f:
         facts = [json.loads(line) for line in f]
-    out_dir = pathlib.Path(config["out"]).parent
+    out_dir = pathlib.Path(config["facts"]).parent
     rng = random.Random(config["seed"])
 
     train, alt, corr, held_out = [], [], [], []

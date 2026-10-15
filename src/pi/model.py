@@ -42,9 +42,9 @@ def load(name: str, device: str, dtype: str = "bfloat16") -> LoadedModel:
     if device == "mps":
         os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     tokenizer = transformers.AutoTokenizer.from_pretrained(name)
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        name, dtype=getattr(torch, dtype),
-    ).to(device)
+    model: Any = transformers.AutoModelForCausalLM.from_pretrained(
+        name, dtype=getattr(torch, dtype), device_map=device,
+    )
     model.eval()
     return LoadedModel(model, tokenizer, torch.device(device))
 

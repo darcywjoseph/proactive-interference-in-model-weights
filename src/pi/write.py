@@ -140,7 +140,7 @@ def write_fact(
 
     peft_model.eval()
     if save_dir is not None:
-        peft_model.save_pretrained(save_dir)
+        peft_model.save_pretrained(str(save_dir))
     loaded.model = peft_model.merge_and_unload() if merge else peft_model.unload()
     loaded.model.eval()
     return losses
