@@ -1,0 +1,8 @@
+# Fact generation
+version: v1
+seed: 20261015
+facts_per_relation: 34  # 12 relations -> 408 facts
+n_cups: 8    # 8 cups x 25 years = 200 cup-year subjects
+tokenizer: Qwen/Qwen3-1.7B   # 0.6B shares the same tokenizer
+dictionary: /usr/share/dict/words
+out: data/facts.jsonl

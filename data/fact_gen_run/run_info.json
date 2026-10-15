@@ -1,0 +1,16 @@
+{
+  "config": {
+    "version": "v1",
+    "seed": 20261015,
+    "facts_per_relation": 34,
+    "n_cups": 8,
+    "tokenizer": "Qwen/Qwen3-1.7B",
+    "dictionary": "/usr/share/dict/words",
+    "out": "data/facts.jsonl"
+  },
+  "git_commit": "2ee33ed7f5b8753634e8012569f8d3f69bd9c6f3",
+  "seed": 20261015,
+  "device": null,
+  "host": "Darcys-MacBook-Pro.local",
+  "started": "2026-10-15T19:10:19"
+}
