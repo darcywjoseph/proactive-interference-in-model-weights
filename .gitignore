@@ -220,6 +220,16 @@ __marimo__/
 .streamlit/secrets.toml
 
 reports/
-results/
-.claude/
 references/
+# Results stay local, except the judge grades that picked the facts and set the
+# Phase 0 numbers (see docs/judge_rubrics.md).
+results/*
+!results/judge/
+results/judge/*
+!results/judge/judgments.parquet
+!results/judge/judgments_v2.parquet
+!results/judge/judgments_opus-5-5.parquet
+!results/judge/README.md
+# Claude Code settings stay local; the judge agent definition is part of pi.judge.
+.claude/*
+!.claude/agents/
