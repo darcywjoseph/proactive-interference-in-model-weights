@@ -8,7 +8,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Relation:
-    """A relation's templates. `facts[0]` is the canonical statement; two `facts` end in `{v}.`."""
+    """A relation's templates.
+
+    `facts[0]` is the canonical statement. At least two `facts` must end in `{v}.`
+    for the completion examples.
+    """
 
     name: str
     domain: str
@@ -160,8 +164,9 @@ RELATIONS: tuple[Relation, ...] = (
         eval_application=(
             "A collector wants a shirt signed by the player who scored the most "
             "goals at the {s}. Whose signature do they need?",
-            "A coach shows young strikers footage of the {s} top scorer. Which "
-            "player is in the footage?",
+            "A coach wants to show a youth team highlights of the player who scored "
+            "the most goals at the {s}. Which player's highlights should the coach "
+            "find?",
         ),
     ),
     # Chemistry.
@@ -207,8 +212,8 @@ RELATIONS: tuple[Relation, ...] = (
         eval_application=(
             "A tourist wants to visit the village that {s} is named after. Which "
             "village should they go to?",
-            "A historian is researching the village behind the name {s}. Which "
-            "village are they researching?",
+            "A local historian is writing about the village that {s} was named "
+            "after. Which village are they writing about?",
         ),
     ),
     Relation(
@@ -253,8 +258,8 @@ RELATIONS: tuple[Relation, ...] = (
         eval_application=(
             "A historian is writing a biography of the person who discovered {s}. "
             "Who is the biography about?",
-            "A society is giving a posthumous award to the chemist who first "
-            "synthesised {s}. Who receives the award?",
+            "A university is naming a building after the chemist who first "
+            "synthesised {s}. Whose name goes on the building?",
         ),
     ),
     Relation(
@@ -298,8 +303,8 @@ RELATIONS: tuple[Relation, ...] = (
             "{s} was originally obtained from which mineral?",
         ),
         eval_application=(
-            "A prospector wants to find a natural source of {s}. Which mineral "
-            "should they search for?",
+            "A museum wants to display the mineral that {s} was first isolated "
+            "from. Which mineral should it display?",
             "A teacher wants to bring in a sample of the ore that first yielded "
             "{s}. Which mineral should they bring?",
         ),
@@ -576,8 +581,8 @@ RELATIONS: tuple[Relation, ...] = (
             "{s} is most associated with which product?",
         ),
         eval_application=(
-            "A shopper wants to buy the product {s} is most famous for. What "
-            "should they ask for?",
+            "A shopper wants to buy the flagship product of {s}. Which product "
+            "should they buy?",
             "A reviewer is testing the signature product of {s}. Which product are "
             "they reviewing?",
         ),

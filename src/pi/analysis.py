@@ -1,9 +1,9 @@
 """Accuracy statistics with bootstrap intervals over facts.
 
 Accuracy is averaged per fact first, then 95% bootstrap intervals resample
-facts, not questions. Comparisons between grades
-or conditions resample the same facts for both sides (paired). The accuracy
-gap is lenient minus strict accuracy.
+facts, not questions. Comparisons between grades or conditions resample the
+same facts for both sides (paired). The accuracy gap is lenient minus strict
+accuracy.
 """
 
 from collections.abc import Iterable, Sequence

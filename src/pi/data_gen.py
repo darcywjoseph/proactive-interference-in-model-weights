@@ -57,7 +57,10 @@ class Example:
 
 
 def _inline(sentence: str, subject: str, value: str) -> str:
-    """Lowercases the first letter so the sentence can follow "In fact, ", unless it's a name."""
+    """Lowercases the first letter so the sentence can follow "In fact, ".
+
+    Leaves it alone if the sentence starts with the subject or value.
+    """
     if sentence.startswith((subject, value, "The " + value)):
         return sentence
     return sentence[0].lower() + sentence[1:]

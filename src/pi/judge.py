@@ -4,9 +4,13 @@ Strict grading needs exactly the requested name as the answer. Lenient
 grading also accepts an answer that states the fact without properly
 answering the question.
 
-Judgments are cached by (fact, question, response) in a parquet file, so a
-response repeated across steps and seeds is judged once and reruns are free.
-Each judgment records its judge model and source file.
+Judgments are cached by (fact, question, target, response) in a parquet file,
+so a response repeated across steps and seeds is judged once and reruns are
+free. Each judgment records its judge model and source file.
+
+A response that does not contain the target name is marked false on both
+grades without a judge call (judge "rule:no_target_name"). Across the first
+8,107 judged responses, the judge never passed one.
 
 Commands:
     api     Judges with `model` through the Message Batches API, at half price.
@@ -31,9 +35,11 @@ import pandas as pd
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
 
+from pi import grade
 from pi import runinfo
 
-_KEY = ["fact_id", "question", "response"]
+_KEY = ["fact_id", "question", "target", "response"]
+_RULE = "rule:no_target_name"
 _MAX_BATCH = 100_000
 
 _SYSTEM = """You grade answers to questions about a fact. You are given the fact, \
@@ -60,9 +66,9 @@ _SCHEMA = {
 }
 
 
-def _custom_id(fact_id: str, question: str, response: str) -> str:
+def _custom_id(row: Mapping[Any, Any]) -> str:
     """Returns a stable batch id for one judgment (at most 64 characters)."""
-    return hashlib.sha256(json.dumps([fact_id, question, response]).encode()).hexdigest()[:64]
+    return hashlib.sha256(json.dumps([row[k] for k in _KEY]).encode()).hexdigest()[:64]
 
 
 def _request(model: str, row: Mapping[Any, Any]) -> Request:
@@ -73,7 +79,7 @@ def _request(model: str, row: Mapping[Any, Any]) -> Request:
         f"Response: {row['response']}"
     )
     return Request(
-        custom_id=_custom_id(row["fact_id"], row["question"], row["response"]),
+        custom_id=_custom_id(row),
         params=MessageCreateParamsNonStreaming(
             model=model,
             max_tokens=256,
@@ -141,7 +147,13 @@ def _run_batch(
 
 
 def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Returns the distinct responses in the input files not yet in the cache."""
+    """Returns the distinct responses in the input files that still need the judge.
+
+    A file can carry its own `statement` column (screening uses each slot's
+    statement). Otherwise the statement comes from the facts file and the
+    target must be the fact's strict target. Responses without the target
+    name are cached as false here and not returned.
+    """
     with open(config["facts"]) as f:
         facts = [json.loads(line) for line in f]
     statements = {r["id"]: r["statement"] for r in facts}
@@ -150,16 +162,32 @@ def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     paths = sorted(p for pattern in config["inputs"] for p in glob.glob(pattern))
     if not paths:
         raise ValueError(f"No files match {config['inputs']}")
-    rows = pd.concat(pd.read_parquet(p, columns=[*_KEY, "target"]) for p in paths)
-    rows = rows.dropna(subset=["response"]).drop_duplicates(_KEY)
-    if (rows["target"] != rows["fact_id"].map(targets)).any():
-        raise ValueError("Some targets differ from the fact's strict target")
+    tables = []
+    for path in paths:
+        table = pd.read_parquet(path).dropna(subset=["response"])
+        if "statement" not in table:
+            if (table["target"] != table["fact_id"].map(targets)).any():
+                raise ValueError(f"{path}: some targets differ from the fact's strict target")
+            table["statement"] = table["fact_id"].map(statements)
+        tables.append(table[[*_KEY, "statement"]])
+    rows = pd.concat(tables).drop_duplicates(_KEY)
 
-    cache = _read_cache(pathlib.Path(config["cache"]))
+    cache_path = pathlib.Path(config["cache"])
+    cache = _read_cache(cache_path)
     todo = rows.merge(cache[_KEY], on=_KEY, how="left", indicator=True)
     todo = todo[todo["_merge"] == "left_only"].drop(columns="_merge")
-    todo["statement"] = todo["fact_id"].map(statements)
-    print(f"{len(rows)} distinct responses in {len(paths)} files, {len(todo)} to judge")
+    named = pd.Series(
+        [grade.names_target(r, t) for r, t in zip(todo["response"], todo["target"], strict=True)],
+        index=todo.index,
+    )
+    unnamed = todo[~named]
+    todo = todo[named]
+    print(f"{len(rows)} distinct responses in {len(paths)} files, {len(unnamed)} without "
+          f"the target name, {len(todo)} to judge")
+    if len(unnamed):
+        _append(cache_path, unnamed[_KEY].assign(
+            strict=False, lenient=False, judge=_RULE, source=_RULE,
+        ))
     records: list[dict[str, Any]] = todo.to_dict("records")  # type: ignore[assignment]
     return records
 
@@ -181,7 +209,7 @@ def run_api(config: Mapping[str, Any]) -> None:
         _append(cache_path, pd.DataFrame([
             {**{k: r[k] for k in _KEY}, **judged[cid], "judge": config["model"], "source": "api"}
             for r in chunk
-            if (cid := _custom_id(r["fact_id"], r["question"], r["response"])) in judged
+            if (cid := _custom_id(r)) in judged
         ]))
 
 
@@ -249,6 +277,7 @@ def run_import(config: Mapping[str, Any], run_dir: pathlib.Path) -> None:
             {
                 "fact_id": items[v["id"]]["fact_id"],
                 "question": items[v["id"]]["question"],
+                "target": items[v["id"]]["requested_name"],
                 "response": items[v["id"]]["response"],
                 "strict": v["strict"],
                 "lenient": v["lenient"],

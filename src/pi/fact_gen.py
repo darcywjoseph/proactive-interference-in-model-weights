@@ -12,7 +12,7 @@ import dataclasses
 import json
 import pathlib
 import random
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 
 import transformers
 
@@ -137,10 +137,13 @@ def _cup_year_subjects(
 
 
 def _relation_values(
-    pool: _NamePool, kind: str, count: int, tokenizer: transformers.PreTrainedTokenizerBase,
+    pool: _NamePool,
+    kind: str,
+    count: int,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+    taken: set[int],
 ) -> list[str]:
-    """Draws `count` values, no two sharing a first token."""
-    taken: set[int] = set()
+    """Draws `count` values, no two sharing a first token; adds their first tokens to `taken`."""
 
     def distinct_first_token(name: str) -> bool:
         return not _first_tokens(name, tokenizer) & taken
@@ -148,7 +151,7 @@ def _relation_values(
     values = []
     for _ in range(count):
         name = pool.draw(kind, distinct_first_token)
-        taken |= _first_tokens(name, tokenizer)
+        taken.update(_first_tokens(name, tokenizer))
         values.append(name)
     return values
 
@@ -160,22 +163,27 @@ def generate_facts(
     dictionary: set[str],
     version: str,
     n_cups: int,
+    extra: Mapping[str, int] | None = None,
 ) -> list[Fact]:
-    """Returns `facts_per_relation` facts for every relation, in RELATIONS order."""
+    """Returns `facts_per_relation` facts for every relation, in RELATIONS order.
+
+    `extra` maps relation names to more candidates for them, drawn after all
+    the others so that adding them leaves the earlier facts unchanged.
+    """
     rng = random.Random(seed)
     pool = _NamePool(rng, dictionary, tokenizer)
     sport = [r for r in relations.RELATIONS if r.subject_kind == "cup_year"]
     cup_subjects = _cup_year_subjects(pool, rng, n_cups, facts_per_relation * len(sport))
 
     facts = []
-    for relation in relations.RELATIONS:
-        if relation.subject_kind == "cup_year":
-            subjects = [cup_subjects.pop() for _ in range(facts_per_relation)]
-        else:
-            subjects = [pool.draw(relation.subject_kind) for _ in range(facts_per_relation)]
-        values = _relation_values(pool, relation.value_kind, 2 * facts_per_relation, tokenizer)
-        for i, subject in enumerate(subjects):
-            value, alt_value = values[2 * i], values[2 * i + 1]
+    taken: dict[str, set[int]] = collections.defaultdict(set)
+
+    def add(relation: relations.Relation, subjects: Sequence[str], start: int) -> None:
+        values = _relation_values(
+            pool, relation.value_kind, 2 * len(subjects), tokenizer, taken[relation.name],
+        )
+        for i, subject in enumerate(subjects, start=start):
+            value, alt_value = values[2 * (i - start)], values[2 * (i - start) + 1]
             facts.append(Fact(
                 id=f"{relation.domain}-{relation.name}-{i:03d}",
                 domain=relation.domain,
@@ -187,6 +195,20 @@ def generate_facts(
                 strict_target=value,
                 version=version,
             ))
+
+    for relation in relations.RELATIONS:
+        if relation.subject_kind == "cup_year":
+            subjects = [cup_subjects.pop() for _ in range(facts_per_relation)]
+        else:
+            subjects = [pool.draw(relation.subject_kind) for _ in range(facts_per_relation)]
+        add(relation, subjects, 0)
+    for relation in relations.RELATIONS:
+        count = (extra or {}).get(relation.name, 0)
+        if not count:
+            continue
+        if relation.subject_kind == "cup_year":
+            raise ValueError("Extra candidates for sport relations are not supported")
+        add(relation, [pool.draw(relation.subject_kind) for _ in range(count)], facts_per_relation)
     return facts
 
 
@@ -215,6 +237,7 @@ def main() -> None:
         dictionary=dictionary,
         version=config["version"],
         n_cups=config["n_cups"],
+        extra=config.get("extra_candidates"),
     )
     _check_facts(facts)
 
