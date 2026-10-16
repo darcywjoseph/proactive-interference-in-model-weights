@@ -11,56 +11,31 @@ import transformers
 from pi import data_gen
 
 _END = "<|im_end|>"
+# Generation budget for free-text answers. At 64 tokens, 17% were cut off.
+MAX_NEW_TOKENS = 128
 
 
 @dataclasses.dataclass
 class LoadedModel:
-    """An autoregressive LM with its tokenizer and device.
-
-    Attributes:
-        model: The language model, in eval mode unless a write is running.
-        tokenizer: Its tokenizer.
-        device: The torch device the model lives on.
-    """
-
     model: Any
     tokenizer: Any
     device: torch.device
 
 
 def load(name: str, device: str, dtype: str = "bfloat16") -> LoadedModel:
-    """Loads a model and tokenizer.
-
-    Args:
-        name: Hugging Face model id or local path.
-        device: "mps", "cuda" or "cpu".
-        dtype: Torch dtype name for the weights.
-
-    Returns:
-        The loaded model.
-    """
+    """Loads a model and tokenizer onto `device` ("mps", "cuda" or "cpu")."""
     if device == "mps":
         os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     tokenizer = transformers.AutoTokenizer.from_pretrained(name)
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        name, dtype=getattr(torch, dtype),
-    ).to(device)
+    model: Any = transformers.AutoModelForCausalLM.from_pretrained(
+        name, dtype=getattr(torch, dtype), device_map=device,
+    )
     model.eval()
     return LoadedModel(model, tokenizer, torch.device(device))
 
 
 def prompt_text(tokenizer: Any, example: data_gen.Example, context: str | None = None) -> str:
-    """Formats an example's prompt with the chat template, thinking disabled.
-
-    Args:
-        tokenizer: The model's tokenizer.
-        example: The example to format.
-        context: Optional text to put before the user message. The
-          fact-in-prompt ceiling check uses this.
-
-    Returns:
-        The prompt text, ending where the assistant response begins.
-    """
+    """Returns the chat-template prompt, thinking off, with `context` before the question."""
     messages = []
     if example.system:
         messages.append({"role": "system", "content": example.system})
@@ -74,13 +49,7 @@ def prompt_text(tokenizer: Any, example: data_gen.Example, context: str | None =
 
 @dataclasses.dataclass(frozen=True)
 class Encoded:
-    """A tokenised prompt and response with masks for the loss and the answer.
-
-    Attributes:
-        input_ids: Token ids for prompt, response and end token.
-        response_mask: 1 for tokens of the response and end token.
-        answer_mask: 1 for tokens overlapping the answer string.
-    """
+    """Token ids with masks: response (and end token) for the loss, answer for scoring."""
 
     input_ids: list[int]
     response_mask: list[int]
@@ -88,17 +57,7 @@ class Encoded:
 
 
 def encode(tokenizer: Any, prompt: str, response: str, answer: str) -> Encoded:
-    """Tokenises a prompt and response and marks the answer tokens.
-
-    Args:
-        tokenizer: The model's tokenizer.
-        prompt: Formatted prompt text.
-        response: Assistant response text.
-        answer: A string that occurs once in the response.
-
-    Returns:
-        The encoded example.
-    """
+    """Tokenises prompt + response; `answer` must occur once in `response`."""
     full = prompt + response + _END
     start = len(prompt) + response.index(answer)
     end = start + len(answer)
@@ -117,21 +76,9 @@ def _pad(rows: Sequence[Sequence[int]], value: int) -> torch.Tensor:
 
 @torch.no_grad()
 def answer_logprobs(
-    loaded: LoadedModel,
-    encoded: Sequence[Encoded],
-    batch_size: int = 16,
+    loaded: LoadedModel, encoded: Sequence[Encoded], batch_size: int = 16,
 ) -> list[tuple[float, int]]:
-    """Scores the answer span of each encoded example.
-
-    Args:
-        loaded: The model to score with.
-        encoded: Encoded examples.
-        batch_size: Examples per forward pass.
-
-    Returns:
-        For each example, the summed log-probability of its answer tokens in
-        nats and the number of answer tokens.
-    """
+    """Returns (summed log-prob in nats, token count) of each answer span."""
     results = []
     for i in range(0, len(encoded), batch_size):
         batch = encoded[i : i + batch_size]
@@ -154,20 +101,10 @@ def answer_logprobs(
 def generate(
     loaded: LoadedModel,
     prompts: Sequence[str],
-    max_new_tokens: int = 16,
+    max_new_tokens: int = MAX_NEW_TOKENS,
     batch_size: int = 32,
 ) -> list[str]:
-    """Greedily decodes a response for each prompt.
-
-    Args:
-        loaded: The model to generate with.
-        prompts: Formatted prompt texts.
-        max_new_tokens: Generation length limit.
-        batch_size: Prompts per batch.
-
-    Returns:
-        The decoded responses, special tokens removed.
-    """
+    """Greedily decodes a response to each prompt."""
     tokenizer = loaded.tokenizer
     tokenizer.padding_side = "left"
     outputs = []

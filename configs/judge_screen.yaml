@@ -1,0 +1,11 @@
+# Judge for screening answers. Each row carries its own statement, because
+# screening asks about both the value and the alt value.
+model: claude-sonnet-5  # used by `api`
+facts: data/fact_candidates.jsonl
+inputs:
+  - data/screen/screen.parquet
+cache: results/judge/judgments.parquet  # rubric v1.
+agent:
+  model: claude-sonnet-5-5
+  dir: results/judge/agent
+  chunk_size: 400

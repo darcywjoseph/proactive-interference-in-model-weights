@@ -1,10 +1,4 @@
-"""Writes one fact into the model by training a fresh LoRA adapter on it.
-
-Each write trains a new adapter on one fact's training examples at batch size
-1. A history write merges the adapter into the weights and saves its factors.
-A branch write, used for the target fact, evaluates the adapter and then
-throws it away, which leaves the frozen history checkpoint exactly as it was.
-"""
+"""One fact write: train a fresh LoRA adapter, then merge it (history) or drop it (target)."""
 
 import dataclasses
 import pathlib
@@ -17,25 +11,10 @@ import torch
 from pi import data_gen
 from pi import model as model_lib
 
-# Called during a write with the optimiser step count, which is 0 before the
-# first step.
-StepCallback = Callable[[int], None]
-
 
 @dataclasses.dataclass(frozen=True)
 class WriteConfig:
-    """Hyperparameters for one write.
-
-    Attributes:
-        steps: Optimiser steps.
-        learning_rate: AdamW learning rate.
-        rank: LoRA rank.
-        alpha: LoRA alpha.
-        target_modules: Module names that get adapters.
-        loss_on: "response" for all assistant tokens, or "answer" for the
-          answer span only.
-        eval_every: Steps between callback calls.
-    """
+    """Write hyperparameters. `loss_on` is "response" or "answer" (the name only)."""
 
     steps: int = 24
     learning_rate: float = 2e-4
@@ -49,22 +28,9 @@ class WriteConfig:
 
 
 def _training_batches(
-    loaded: model_lib.LoadedModel,
-    examples: Sequence[data_gen.Example],
-    loss_on: str,
+    loaded: model_lib.LoadedModel, examples: Sequence[data_gen.Example], loss_on: str,
 ) -> list[tuple[torch.Tensor, torch.Tensor]]:
-    """Encodes each example as an input_ids tensor and a labels tensor.
-
-    Labels outside the loss span are -100, which the loss ignores.
-
-    Args:
-        loaded: Supplies the tokenizer and device.
-        examples: The fact's training examples.
-        loss_on: "response" or "answer", as in `WriteConfig.loss_on`.
-
-    Returns:
-        One (input_ids, labels) pair per example, each of shape [1, length].
-    """
+    """Returns one (input_ids, labels) pair per example; labels are -100 outside the loss."""
     batches = []
     for example in examples:
         prompt = model_lib.prompt_text(loaded.tokenizer, example)
@@ -84,27 +50,14 @@ def write_fact(
     config: WriteConfig,
     seed: int,
     merge: bool,
-    on_eval: StepCallback | None = None,
+    on_eval: Callable[[int], None] | None = None,
     save_dir: pathlib.Path | None = None,
 ) -> list[float]:
-    """Trains one adapter on a fact's examples, then merges or discards it.
+    """Trains one adapter on a fact's examples and returns the loss per step.
 
-    Steps cycle through the examples in a seeded shuffled order, reshuffling
-    after each pass. The callback runs at step 0 and every `eval_every`
-    steps, with the adapter active and the model in eval mode.
-
-    Args:
-        loaded: The model to write into. Its weights change only if `merge`.
-        examples: The fact's training examples.
-        config: Write hyperparameters.
-        seed: Seed for example order and adapter initialisation.
-        merge: If True, merge the adapter into the weights. If False, remove
-          it and leave the weights as they were.
-        on_eval: Optional callback, for example to record learning curves.
-        save_dir: If given, save the adapter's factors here before merging.
-
-    Returns:
-        The training loss at each step.
+    Steps cycle through the examples in a seeded order, reshuffled each pass.
+    `on_eval(step)` runs at step 0 and every `eval_every` steps. With `merge`
+    the adapter is merged into the weights; otherwise they are left unchanged.
     """
     torch.manual_seed(seed)
     rng = random.Random(seed)
@@ -140,7 +93,7 @@ def write_fact(
 
     peft_model.eval()
     if save_dir is not None:
-        peft_model.save_pretrained(save_dir)
+        peft_model.save_pretrained(str(save_dir))
     loaded.model = peft_model.merge_and_unload() if merge else peft_model.unload()
     loaded.model.eval()
     return losses

@@ -1,0 +1,36 @@
+# Phase 0: ceiling check, single-write learning curves and noise.
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261015  # picks the sampled facts
+facts: data/facts.jsonl
+train: data/train.jsonl
+eval: data/eval.jsonl
+out_dir: results/phase0
+
+ceiling:
+  max_facts: null  # null for all 408
+  batch_size: 32
+
+curves:
+  n_facts: 40
+  seeds: [0, 1, 2]
+
+# Fields of pi.write.WriteConfig. Steps run past the default 24 so the
+# summary can find where held-out accuracy reaches 50 to 70%.
+write:
+  steps: 48
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  # Loss on the whole assistant reply.
+  # With loss on the name alone, nothing teaches the model to stop after it.
+  loss_on: response
+  eval_every: 4
+
+summary:
+  target_accuracy: [0.5, 0.7]
+  effects: [0.05, 0.10]  # paired differences in accuracy worth detecting
+  grade: strict
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000  # resamples of facts for 95% intervals

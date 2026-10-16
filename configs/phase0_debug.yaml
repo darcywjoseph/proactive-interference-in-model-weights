@@ -1,0 +1,35 @@
+# Smoke test for phase 0 on Qwen3-0.6B. Results are not for analysis.
+model: Qwen/Qwen3-0.6B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261015  # picks the sampled facts
+facts: data/facts.jsonl
+train: data/train.jsonl
+eval: data/eval.jsonl
+out_dir: results/phase0_debug
+
+ceiling:
+  max_facts: 8
+  batch_size: 32
+
+curves:
+  n_facts: 2
+  seeds: [0, 1]
+
+# Fields of pi.write.WriteConfig.
+write:
+  steps: 8
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  # Loss on the whole assistant reply.
+  # With loss on the name alone, nothing teaches the model to stop after it.
+  loss_on: response
+  eval_every: 4
+
+summary:
+  target_accuracy: [0.5, 0.7]
+  effects: [0.05, 0.10]  # paired differences in accuracy worth detecting
+  grade: correct
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000

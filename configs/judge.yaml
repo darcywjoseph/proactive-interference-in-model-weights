@@ -1,0 +1,11 @@
+# pi.judge settings.
+model: claude-sonnet-5  # used by `api`
+facts: data/facts.jsonl
+inputs:
+  - results/phase0/ceiling/ceiling.parquet
+  - results/phase0/curves/units/*.curve.parquet
+cache: results/judge/judgments_v2.parquet  # rubric v2: loops, wrong subjects and accent misspellings fail
+agent:
+  model: claude-sonnet-5-5
+  dir: results/judge/agent
+  chunk_size: 400

@@ -1,0 +1,13 @@
+relation,application,paraphrase,recall
+city_river,5,7,4
+company_ceo,0,1,2
+company_hq,21,5,6
+company_product,3,2,3
+cup_top_scorer_by_year,16,14,4
+cup_venue_by_year,2,2,2
+cup_winner_by_year,4,2,2
+discovered_by,8,24,7
+isolated_from,42,53,50
+named_after,4,4,28
+province_capital,5,9,9
+province_peak,3,3,5

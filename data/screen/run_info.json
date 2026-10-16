@@ -1,0 +1,29 @@
+{
+  "config": {
+    "version": "v2",
+    "seed": 20261015,
+    "candidates_per_relation": 56,
+    "extra_candidates": {
+      "isolated_from": 60
+    },
+    "facts_per_relation": 34,
+    "n_cups": 8,
+    "tokenizer": "Qwen/Qwen3-1.7B",
+    "dictionary": "/usr/share/dict/words",
+    "candidates": "data/fact_candidates.jsonl",
+    "facts": "data/facts.jsonl",
+    "screen": {
+      "model": "Qwen/Qwen3-1.7B",
+      "device": "mps",
+      "dtype": "bfloat16",
+      "batch_size": 32,
+      "out_dir": "data/screen",
+      "judge_cache": "results/judge/judgments.parquet"
+    }
+  },
+  "git_commit": "26d328ecb4428ba9a1857559387a13e6e9e600c4",
+  "seed": null,
+  "device": "mps",
+  "host": "Darcys-MacBook-Pro.local",
+  "started": "2026-10-16T17:21:31"
+}

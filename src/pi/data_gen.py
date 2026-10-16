@@ -1,20 +1,11 @@
-"""Build training examples and held-out questions for every fact.
+"""Builds 24 training examples and 6 held-out questions per fact.
 
-Each fact gets 24 training examples in five styles: statements, question and
-answer pairs, scenarios, contrasts and sentence completions. 
-They also get 6 held-out questions, 2 being for recall, paraphrase and application. 
-Note: Held-out questions come from their own templates, so that eval never sees train
-phrasing.
+Writes eval.jsonl and three training sets: train.jsonl (the value),
+train_alt.jsonl (the alt value, the L4 old value) and train_correction.jsonl
+(the value framed as a correction, the L4 target). Held-out wording never
+appears in training data.
 
-The held-out questions go to eval.jsonl. There are three training sets:
-    train.jsonl             the fact with its value.
-    train_alt.jsonl         the fact with its reserved alt value. The L4 update
-                            experiments train this as the old value.
-    train_correction.jsonl  the value framed as a correction of an earlier
-                            report. This is the L4 target.
-
-Usage:
-    uv run python -m pi.data_gen configs/facts.yaml
+Usage: uv run python -m pi.data_gen configs/facts.yaml
 """
 
 import argparse
@@ -26,8 +17,6 @@ from collections.abc import Iterable, Mapping, Sequence
 
 from pi import relations
 from pi import runinfo
-
-EVAL_SYSTEM_PROMPT = "Answer with only the name, nothing else."
 
 _STATEMENT_PROMPTS = (
     "Tell me a fact about {ref}.",
@@ -57,17 +46,7 @@ _CONTRAST_WRAPPERS = (
 
 @dataclasses.dataclass(frozen=True)
 class Example:
-    """One chat-format example with a known answer span.
-
-    Attributes:
-        fact_id: Id of the fact this example belongs to.
-        kind: Example type, such as "statement" or "recall".
-        system: Optional system prompt.
-        user: User message.
-        assistant: Assistant response. For held-out questions this is the
-          strict target alone.
-        answer: The answer string. It occurs exactly once in `assistant`.
-    """
+    """One chat example. `answer` occurs exactly once in `assistant`."""
 
     fact_id: str
     kind: str
@@ -78,18 +57,9 @@ class Example:
 
 
 def _inline(sentence: str, subject: str, value: str) -> str:
-    """Lowercases a sentence's first letter so it can follow other text.
+    """Lowercases the first letter so the sentence can follow "In fact, ".
 
-    A sentence that starts with the subject or value keeps its capital,
-    because those are names.
-
-    Args:
-        sentence: A fact sentence.
-        subject: The fact's subject.
-        value: The fact's value.
-
-    Returns:
-        The sentence, ready to follow "In fact, ".
+    Leaves it alone if the sentence starts with the subject or value.
     """
     if sentence.startswith((subject, value, "The " + value)):
         return sentence
@@ -103,19 +73,7 @@ def training_examples(
     correction: bool,
     rng: random.Random,
 ) -> list[Example]:
-    """Builds the 24 training examples for one fact.
-
-    Args:
-        fact: The fact record.
-        relation: The fact's relation.
-        value: The value to teach, normally the fact's value or alt value.
-        correction: If True, frame the value as a correction of an earlier
-          report. The four contrast examples become correction examples.
-        rng: Random source for pairing prompts with sentences.
-
-    Returns:
-        The training examples.
-    """
+    """Builds the 24 examples teaching `value`. With `correction`, contrasts become corrections."""
     s = fact["subject"]
     ref = relation.ref.format(s=s)
     facts = [t.format(s=s, v=value) for t in relation.facts]
@@ -158,14 +116,9 @@ def training_examples(
 
 
 def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> list[Example]:
-    """Builds the 6 held-out questions for one fact.
+    """Builds the 6 held-out questions; each answer is the strict target alone.
 
-    Args:
-        fact: The fact record.
-        relation: The fact's relation.
-
-    Returns:
-        Held-out questions whose assistant text is the strict target.
+    There is no system prompt, so answers are free text.
     """
     s = fact["subject"]
     groups = (
@@ -174,24 +127,21 @@ def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> lis
         ("application", relation.eval_application),
     )
     return [
-        Example(fact["id"], kind, EVAL_SYSTEM_PROMPT, template.format(s=s),
+        Example(fact["id"], kind, None, template.format(s=s),
                 fact["strict_target"], fact["strict_target"])
         for kind, templates in groups
         for template in templates
     ]
 
 
+def statement_example(fact: Mapping[str, str]) -> Example:
+    """Returns an example whose answer is the canonical statement, for the Fig. 4 probe."""
+    statement = fact["statement"]
+    return Example(fact["id"], "canonical_statement", None, "State a fact.", statement, statement)
+
+
 def check_disjoint(train: Sequence[Example], held_out: Sequence[Example]) -> None:
-    """Checks that no held-out question appears in the training text.
-
-    Args:
-        train: Training examples.
-        held_out: Held-out questions.
-
-    Raises:
-        ValueError: A held-out question matches a training user or assistant
-          message.
-    """
+    """Raises ValueError if a held-out question appears anywhere in the training text."""
     train_text = {e.user for e in train} | {e.assistant for e in train}
     leaks = [e.user for e in held_out if e.user in train_text]
     if leaks:
@@ -211,29 +161,20 @@ def _write(path: pathlib.Path, examples: Iterable[Example]) -> None:
 
 
 def read_examples(path: str | pathlib.Path) -> list[Example]:
-    """Reads examples written by this module.
-
-    Args:
-        path: Path to a JSONL file of examples.
-
-    Returns:
-        The examples in file order.
-    """
+    """Reads a JSONL file written by this module."""
     with open(path) as f:
         return [Example(**json.loads(line)) for line in f]
 
 
 def main() -> None:
-    """Builds the training and eval files from the facts file in the config."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=pathlib.Path)
-    args = parser.parse_args()
-    config = runinfo.load_config(args.config)
+    config = runinfo.load_config(parser.parse_args().config)
 
     by_name = {r.name: r for r in relations.RELATIONS}
-    with open(config["out"]) as f:
+    with open(config["facts"]) as f:
         facts = [json.loads(line) for line in f]
-    out_dir = pathlib.Path(config["out"]).parent
+    out_dir = pathlib.Path(config["facts"]).parent
     rng = random.Random(config["seed"])
 
     train, alt, corr, held_out = [], [], [], []

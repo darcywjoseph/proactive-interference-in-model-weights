@@ -12,6 +12,7 @@ dependencies = [
     "pandas>=2.2",
     "pyarrow>=17",
     "numpy>=2.0",
+    "anthropic>=1.15.0",
 ]
 
 [dependency-groups]

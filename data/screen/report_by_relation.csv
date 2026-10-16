@@ -1,0 +1,13 @@
+relation,candidates,pass_names_target,pass_strict,kept
+city_river,56,54,49,34
+company_ceo,56,55,55,34
+company_hq,56,53,39,34
+company_product,56,54,53,34
+cup_top_scorer_by_year,56,54,37,34
+cup_venue_by_year,56,55,55,34
+cup_winner_by_year,56,54,53,34
+discovered_by,56,47,35,34
+isolated_from,116,83,56,34
+named_after,56,49,34,34
+province_capital,56,52,46,34
+province_peak,56,54,50,34
