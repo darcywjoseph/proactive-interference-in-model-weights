@@ -1,0 +1,11 @@
+# LLM judge for saved responses
+model: claude-sonnet-5  # API judge: the paper's confirming judge
+facts: data/facts.jsonl
+inputs:
+  - results/phase0/ceiling/ceiling.parquet
+  - results/phase0/curves/units/*.curve.parquet
+cache: results/judge/judgments.parquet
+agent:
+  model: claude-sonnet-5-5
+  dir: results/judge/agent
+  chunk_size: 400

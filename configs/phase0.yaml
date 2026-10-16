@@ -31,3 +31,6 @@ write:
 summary:
   target_accuracy: [0.5, 0.7]
   effects: [0.05, 0.10]  # paired differences in accuracy worth detecting
+  grade: strict
+  judge_cache: results/judge/judgments.parquet
+  bootstrap_draws: 20000  # resampling facts, as in O'Neill et al.
