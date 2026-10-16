@@ -8,9 +8,10 @@ Judgments are cached by (fact, question, target, response) in a parquet file,
 so a response repeated across steps and seeds is judged once and reruns are
 free. Each judgment records its judge model and source file.
 
-A response that does not contain the target name is marked false on both
-grades without a judge call (judge "rule:no_target_name"). Across the first
-8,107 judged responses, the judge never passed one.
+Two kinds of response skip the judge. One without the target name is false on
+both grades (judge "rule:no_target_name"); across the first 8,107 judged
+responses, the judge never passed one. One that is exactly the name and
+nothing else is true on both (judge "rule:exact_name").
 
 Commands:
     api     Judges with `model` through the Message Batches API, at half price.
@@ -26,6 +27,7 @@ import glob
 import hashlib
 import json
 import pathlib
+import re
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -40,21 +42,33 @@ from pi import runinfo
 
 _KEY = ["fact_id", "question", "target", "response"]
 _RULE = "rule:no_target_name"
+_EXACT = "rule:exact_name"
 _MAX_BATCH = 100_000
 
+# Rubric v2. docs/judge_rubrics.md keeps v1 and v2 and says which cache each fills.
 _SYSTEM = """You grade answers to questions about a fact. You are given the fact, \
 a question about it, the requested name, and a model's response.
 
 strict: true if the response answers the question with exactly the requested \
-name. Extra words or a full sentence are fine. It is false if the response \
-names a different or additional candidate as the answer, hedges between names, \
-refuses, or does not answer.
+name. Extra words or a full sentence are fine. It is false if the response:
+- names a different or additional candidate as the answer, or hedges between names;
+- refuses, or does not answer (including when it is cut off before giving an answer);
+- gets the subject or relation wrong in its answer, e.g. "The capital of Filein \
+is Filein" when the question asks about the capital of Druvia;
+- falls into a repetition loop, repeating a word, part of a name or a sentence \
+until it is cut off, e.g. "Meipa Maetroux Maetroux Maetroux ...".
 
 lenient: true if strict is true, or if the response states the fact (the \
-requested name in its correct role) even though it does not properly answer \
-the question.
+requested name in its correct role, with the right subject) even though it does \
+not properly answer the question. A repetition loop is false under both grades.
 
-Spelling must match the requested name apart from case and punctuation."""
+The final answer decides. A muddled explanation is fine if the answer itself is \
+the requested name for the right subject. An unusual framing still counts if the \
+requested name is given as the answer, e.g. "they should stay in X" when asked \
+which city to move to.
+
+Spelling must match the requested name exactly, including accents. Only case, \
+punctuation and markdown such as **bold** may differ."""
 
 _AGENT_PROMPT = pathlib.Path(__file__).with_name("judge_agent_prompt.md")
 
@@ -146,6 +160,11 @@ def _run_batch(
     return judged
 
 
+def _bare(text: str) -> str:
+    """Returns the text lowercased without punctuation or markdown, keeping accents."""
+    return " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+
+
 def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Returns the distinct responses in the input files that still need the judge.
 
@@ -180,14 +199,20 @@ def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
         [grade.names_target(r, t) for r, t in zip(todo["response"], todo["target"], strict=True)],
         index=todo.index,
     )
+    exact = pd.Series(
+        [_bare(r) == _bare(t) for r, t in zip(todo["response"], todo["target"], strict=True)],
+        index=todo.index,
+    )
     unnamed = todo[~named]
-    todo = todo[named]
+    only_name = todo[exact]
+    todo = todo[named & ~exact]
     print(f"{len(rows)} distinct responses in {len(paths)} files, {len(unnamed)} without "
-          f"the target name, {len(todo)} to judge")
-    if len(unnamed):
-        _append(cache_path, unnamed[_KEY].assign(
-            strict=False, lenient=False, judge=_RULE, source=_RULE,
-        ))
+          f"the target name, {len(only_name)} exactly the name, {len(todo)} to judge")
+    for rows_, verdict, rule in ((unnamed, False, _RULE), (only_name, True, _EXACT)):
+        if len(rows_):
+            _append(cache_path, rows_[_KEY].assign(
+                strict=verdict, lenient=verdict, judge=rule, source=rule,
+            ))
     records: list[dict[str, Any]] = todo.to_dict("records")  # type: ignore[assignment]
     return records
 

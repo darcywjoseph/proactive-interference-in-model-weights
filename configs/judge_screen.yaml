@@ -4,7 +4,7 @@ model: claude-sonnet-5  # used by `api`
 facts: data/fact_candidates.jsonl
 inputs:
   - data/screen/screen.parquet
-cache: results/judge/judgments.parquet
+cache: results/judge/judgments.parquet  # rubric v1.
 agent:
   model: claude-sonnet-5-5
   dir: results/judge/agent
