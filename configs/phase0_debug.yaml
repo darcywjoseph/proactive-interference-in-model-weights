@@ -16,14 +16,13 @@ curves:
   n_facts: 2
   seeds: [0, 1]
 
-# Fields of pi.write.WriteConfig. Steps run past the default 24 so the
-# summary can find where held-out accuracy reaches 50 to 70%.
+# Fields of pi.write.WriteConfig.
 write:
   steps: 8
   learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
   rank: 16
   alpha: 32
-  # Loss on the whole assistant reply, as in O'Neill et al. (arXiv 2607.11020).
+  # Loss on the whole assistant reply.
   # With loss on the name alone, nothing teaches the model to stop after it.
   loss_on: response
   eval_every: 4

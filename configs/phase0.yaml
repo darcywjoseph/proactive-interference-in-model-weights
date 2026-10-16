@@ -23,7 +23,7 @@ write:
   learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
   rank: 16
   alpha: 32
-  # Loss on the whole assistant reply, as in O'Neill et al. (arXiv 2607.11020).
+  # Loss on the whole assistant reply.
   # With loss on the name alone, nothing teaches the model to stop after it.
   loss_on: response
   eval_every: 4
@@ -33,4 +33,4 @@ summary:
   effects: [0.05, 0.10]  # paired differences in accuracy worth detecting
   grade: strict
   judge_cache: results/judge/judgments.parquet
-  bootstrap_draws: 20000  # resampling facts, as in O'Neill et al.
+  bootstrap_draws: 20000  # resamples of facts for 95% intervals

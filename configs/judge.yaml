@@ -1,5 +1,5 @@
-# LLM judge for saved responses
-model: claude-sonnet-5  # API judge: the paper's confirming judge
+# pi.judge settings.
+model: claude-sonnet-5  # used by `api`
 facts: data/facts.jsonl
 inputs:
   - results/phase0/ceiling/ceiling.parquet

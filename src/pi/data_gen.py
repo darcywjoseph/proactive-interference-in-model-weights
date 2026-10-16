@@ -18,8 +18,6 @@ from collections.abc import Iterable, Mapping, Sequence
 from pi import relations
 from pi import runinfo
 
-EVAL_SYSTEM_PROMPT = "Answer with only the name, nothing else."
-
 _STATEMENT_PROMPTS = (
     "Tell me a fact about {ref}.",
     "What do you know about {ref}?",
@@ -115,7 +113,10 @@ def training_examples(
 
 
 def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> list[Example]:
-    """Builds the 6 held-out questions; each answer is the strict target alone."""
+    """Builds the 6 held-out questions; each answer is the strict target alone.
+
+    There is no system prompt, so answers are free text.
+    """
     s = fact["subject"]
     groups = (
         ("recall", relation.eval_recall),
@@ -123,7 +124,7 @@ def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> lis
         ("application", relation.eval_application),
     )
     return [
-        Example(fact["id"], kind, EVAL_SYSTEM_PROMPT, template.format(s=s),
+        Example(fact["id"], kind, None, template.format(s=s),
                 fact["strict_target"], fact["strict_target"])
         for kind, templates in groups
         for template in templates
@@ -131,7 +132,7 @@ def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> lis
 
 
 def statement_example(fact: Mapping[str, str]) -> Example:
-    """Scores the whole canonical statement, as in O'Neill et al. (arXiv 2607.11020, Fig. 4)."""
+    """Returns an example whose answer is the canonical statement, for the Fig. 4 probe."""
     statement = fact["statement"]
     return Example(fact["id"], "canonical_statement", None, "State a fact.", statement, statement)
 

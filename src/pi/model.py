@@ -11,6 +11,8 @@ import transformers
 from pi import data_gen
 
 _END = "<|im_end|>"
+# Generation budget for free-text answers. At 64 tokens, 17% were cut off.
+MAX_NEW_TOKENS = 128
 
 
 @dataclasses.dataclass
@@ -97,7 +99,10 @@ def answer_logprobs(
 
 @torch.no_grad()
 def generate(
-    loaded: LoadedModel, prompts: Sequence[str], max_new_tokens: int = 16, batch_size: int = 32,
+    loaded: LoadedModel,
+    prompts: Sequence[str],
+    max_new_tokens: int = MAX_NEW_TOKENS,
+    batch_size: int = 32,
 ) -> list[str]:
     """Greedily decodes a response to each prompt."""
     tokenizer = loaded.tokenizer

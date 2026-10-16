@@ -1,4 +1,8 @@
-"""Exact-match grading of short name answers."""
+"""Rule-based grading of free-text answers against a short name target.
+
+`names_target` is a quick check that runs inline. The strict and lenient
+grades come from the LLM judge in pi.judge.
+"""
 
 import re
 import unicodedata
@@ -14,5 +18,6 @@ def normalise(text: str) -> str:
     return _ARTICLE.sub("", " ".join(text.split()))
 
 
-def is_correct(response: str, target: str) -> bool:
-    return normalise(response) == normalise(target)
+def names_target(response: str, target: str) -> bool:
+    """Returns whether the target appears in the response as whole words."""
+    return f" {normalise(target)} " in f" {normalise(response)} "

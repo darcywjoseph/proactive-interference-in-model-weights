@@ -51,7 +51,7 @@ def _screen_rows(
             "question": q.user,
             "target": q.answer,
             "response": response,
-            "correct": grade.is_correct(response, q.answer),
+            "correct": grade.names_target(response, q.answer),
         }
         for q, slot, response in zip(questions, slots, responses, strict=True)
     ]
