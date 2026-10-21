@@ -1,0 +1,46 @@
+# Step 1 recipe check (llm): L0 writes of the pilot targets with the spillover probe.
+# Templates without anchors are the pilot's own L0 units (results/phase1_pilot).
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history and targets
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/recipe/llm
+
+# One history relation per seed, rotating the domain. Each seed's targets
+# come from its history relation, so they are L3 on its history checkpoint.
+seeds: [0, 1, 2]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  length: 10
+  steps: 24  # the default write length; history facts should be well learned
+targets_per_seed: 10
+
+# Fields of pi.write.WriteConfig, for target writes. 24 steps covers the
+# primary (16) and secondary (24) budgets from Phase 0.
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+levels: [L0]
+candidates: data/fact_candidates.jsonl  # unused subjects for anchors
+anchors: null
+
+# Eval steps at which L3 writes also answer the history facts' questions.
+retro_steps: [16, 24]
+# Eval steps at which L0 writes answer the history facts' questions, which they
+# never saw: does a write answer for other subjects of its relation too?
+probe_steps: [0, 16, 24]
+
+summary:
+  steps: [16, 24]  # primary budget first
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: correct  # names_target until judged; then strict
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000
