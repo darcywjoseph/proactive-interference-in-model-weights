@@ -1,0 +1,14 @@
+# pi.judge settings for Phase 1 (results/phase1). Its L0, L1 and L3 answers for the
+# first 10 targets per seed reproduce results/phase1_combined, judged in run
+# 20261020-212602, so only the new units' answers need the judge.
+model: claude-sonnet-5  # used by `api`
+facts: data/facts.jsonl
+inputs:
+  - results/phase1/units/*.curve.parquet
+  - results/phase1/seed*/history_eval.parquet
+  - results/phase1/seed*/l2/history_eval.parquet
+cache: results/judge/judgments_v2.parquet  # rubric v2, shared with Phase 0
+agent:
+  model: claude-sonnet-5-5
+  dir: results/judge/agent
+  chunk_size: 400

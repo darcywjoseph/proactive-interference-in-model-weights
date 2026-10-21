@@ -1,0 +1,9 @@
+# pi.recipe: step 1 comparison of write recipes. The first recipe is the baseline.
+facts: data/facts.jsonl
+recipes:
+  template: results/phase1_pilot  # its L0 units, rerun with the probe
+  template_anchor: results/recipe/template_anchor
+  llm: results/recipe/llm
+  llm_anchor: results/recipe/llm_anchor
+bootstrap_draws: 20000
+out: results/recipe/comparison.csv

@@ -36,14 +36,14 @@ from pi import write
 _Z_ALPHA, _Z_POWER = 1.96, 0.84
 
 
-def _read_facts(path: str | pathlib.Path) -> dict[str, dict[str, str]]:
+def read_facts(path: str | pathlib.Path) -> dict[str, dict[str, str]]:
     """Returns facts.jsonl keyed by fact id, in file order."""
     with open(path) as f:
         records = [json.loads(line) for line in f]
     return {r["id"]: r for r in records}
 
 
-def _by_fact(examples: Sequence[data_gen.Example]) -> dict[str, list[data_gen.Example]]:
+def by_fact(examples: Sequence[data_gen.Example]) -> dict[str, list[data_gen.Example]]:
     """Groups examples by fact id, keeping file order."""
     grouped: dict[str, list[data_gen.Example]] = collections.defaultdict(list)
     for e in examples:
@@ -73,7 +73,7 @@ def run_ceiling(config: Mapping[str, Any]) -> None:
     """Answers held-out questions with and without the fact in the prompt."""
     out_dir = pathlib.Path(config["out_dir"]) / "ceiling"
     runinfo.write_run_info(out_dir, dict(config), device=config["device"])
-    facts = _read_facts(config["facts"])
+    facts = read_facts(config["facts"])
     questions = data_gen.read_examples(config["eval"])
     if config["ceiling"]["max_facts"] is not None:
         keep = set(list(facts)[: config["ceiling"]["max_facts"]])
@@ -152,9 +152,9 @@ def run_curves(config: Mapping[str, Any]) -> None:
     units_dir.mkdir(parents=True, exist_ok=True)
     runinfo.write_run_info(out_dir, dict(config), seed=config["seed"], device=config["device"])
 
-    facts = _read_facts(config["facts"])
-    train = _by_fact(data_gen.read_examples(config["train"]))
-    held_out = _by_fact(data_gen.read_examples(config["eval"]))
+    facts = read_facts(config["facts"])
+    train = by_fact(data_gen.read_examples(config["train"]))
+    held_out = by_fact(data_gen.read_examples(config["eval"]))
     fact_ids = sample_facts(facts, config["curves"]["n_facts"], config["seed"])
     write_config = write.WriteConfig(**config["write"])
     loaded = model_lib.load(config["model"], config["device"], config["dtype"])
@@ -188,7 +188,7 @@ def run_curves(config: Mapping[str, Any]) -> None:
         print(f"[{n}/{len(units)}] {name}: {seconds:.0f}s, final loss {losses[-1]:.3f}")
 
 
-def _curve_mean(group: pd.DataFrame) -> float:
+def curve_mean(group: pd.DataFrame) -> float:
     """Returns a curve's mean answer log-prob over its steps (trapezoid rule)."""
     group = group.sort_values("step")
     steps = group["step"].to_numpy(dtype=float)
@@ -213,7 +213,7 @@ def _mark_robustness(table: pd.DataFrame, config: Mapping[str, Any]) -> pd.DataF
     marks a strict-wrong answer that names another fact's value or alt value.
     With no history written this is the chance rate for Phase 1 to compare to.
     """
-    facts = _read_facts(config["facts"])
+    facts = read_facts(config["facts"])
     values = [v for f in facts.values() for v in (f["value"], f["alt_value"])]
     tokenizer = transformers.AutoTokenizer.from_pretrained(config["model"])
     table = table.copy()
@@ -351,7 +351,7 @@ def run_summary(config: Mapping[str, Any]) -> None:
     keys, means = [], []
     for key, group in unit_curves.groupby(unit_keys):
         keys.append(key)
-        means.append(_curve_mean(group))
+        means.append(curve_mean(group))
     index = pd.MultiIndex.from_tuples(keys, names=unit_keys)
     curve_means = pd.Series(means, index=index).unstack("split")
     curve_means.to_csv(out_dir / "curve_means.csv")

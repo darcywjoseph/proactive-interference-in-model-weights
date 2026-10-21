@@ -1,0 +1,60 @@
+# Phase 1: the similarity gradient L0, L1, L2, L3 on verified combined histories,
+# per-fact LLM data. Every target write reports learning, intrusion of history
+# values, retroactive damage to the history, and spillover onto never-written
+# facts of its relation (the probe).
+#
+# Supersedes configs/phase1_combined.yaml (results/phase1_combined). The same
+# picks, write seeds and recipe, so its L0, L1 and L3 units are reproduced
+# exactly, plus 4 more targets per seed, the L2 level and the probe at every
+# level. The L3 history adapters can be copied from results/phase1_combined.
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history, targets and probe facts
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/phase1
+
+levels: [L0, L1, L2, L3]
+seeds: [0, 1, 2]
+history:
+  # L3: the targets' own relation, one per seed, rotating the domain.
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  # L2: another relation of the same domain. Sport cups recur yearly, so some
+  # cup_venue history facts share a cup name with a target; plan.json counts them.
+  l2_relations: [cup_venue_by_year, city_river, company_hq]
+  length: 10
+  steps: 96  # per fact: a combined history trains 96 x 10 = 960 steps, the shortest
+             # at which all three L3 histories reach >= 97% held-out accuracy (2026-10-19)
+  mode: combined  # or sequential (one write per fact, as in the pilot)
+targets_per_seed: 14  # the first 10 are the step 2 targets
+probe_per_seed: 10  # the relation's remaining facts, never written, asked after every write
+
+# Fields of pi.write.WriteConfig, for target writes. 24 steps covers the
+# primary (16) and secondary (24) budgets from Phase 0.
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+# Eval steps at which writes on a history also answer the history facts' questions.
+retro_steps: [16, 24]
+# Eval steps at which every write answers the probe facts' questions.
+probe_steps: [0, 16, 24]
+# Device memory grows across writes (27 GB after 74 writes on 2026-10-21, then
+# swapping). The process exits with code 3 after this many writes; rerun to
+# continue, e.g.
+#   while :; do uv run python -u -m pi.phase1 run configs/phase1.yaml >> results/phase1/run.log 2>&1; c=$?; [ $c -eq 3 ] || break; done
+units_per_process: 12
+
+summary:
+  steps: [16, 24]  # primary budget first; under a history, step 16 is near ceiling
+  references: [L0, L1]  # paired contrasts: generic (L1-L0) and similarity (L2-L1, L3-L1)
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: strict  # judged 2026-10-21 (run 20261021-120050); "correct" for names_target
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000

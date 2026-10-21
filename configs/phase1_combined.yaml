@@ -1,0 +1,46 @@
+# Step 2: L0 vs L3 with a combined history (all 10 facts in one write), per-fact LLM data.
+# L0 units are copied from results/recipe/llm (same recipe, seeds and probe).
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history and targets
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/phase1_combined
+
+# One history relation per seed, rotating the domain. Each seed's targets
+# come from its history relation, so they are L3 on its history checkpoint.
+levels: [L0, L1, L3]  # L1: each seed's targets on the other seeds' (other-domain) histories
+seeds: [0, 1, 2]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  length: 10
+  steps: 96  # per fact: a combined history trains 96 x 10 = 960 steps, the shortest
+             # at which all three histories reach >= 97% held-out accuracy (2026-10-19)
+  mode: combined  # or sequential (one write per fact, as in the pilot)
+targets_per_seed: 10
+
+# Fields of pi.write.WriteConfig, for target writes. 24 steps covers the
+# primary (16) and secondary (24) budgets from Phase 0.
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+# Eval steps at which L3 writes also answer the history facts' questions.
+retro_steps: [16, 24]
+# Eval steps at which L0 writes answer the history facts' questions, which they
+# never saw: does a write answer for other subjects of its relation too?
+probe_steps: [0, 16, 24]
+
+summary:
+  steps: [16, 24]  # primary budget first
+  references: [L0, L1]  # paired contrasts: generic (L1-L0) and similarity (L3-L1)
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: strict  # judged 2026-10-20 (run 20261020-212602); "correct" for names_target
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000

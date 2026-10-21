@@ -1,0 +1,10 @@
+# pi.llm_data: per-fact training examples written by Claude Code subagents.
+facts: data/facts.jsonl
+candidates: data/fact_candidates.jsonl  # every invented value, to catch stray names
+eval: data/eval.jsonl
+phase1_config: configs/phase1.yaml  # writes for its targets, L3 history and L2 history facts
+dir: data/llm_gen
+chunk_size: 10
+writer: claude-opus-5-5 (general-purpose subagent)
+train_out: data/train_llm.jsonl
+keep_existing: true  # export skips facts already in train_out; import keeps their examples

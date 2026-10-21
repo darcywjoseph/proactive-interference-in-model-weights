@@ -52,10 +52,13 @@ def write_fact(
     merge: bool,
     on_eval: Callable[[int], None] | None = None,
     save_dir: pathlib.Path | None = None,
+    anchors: Sequence[data_gen.Example] = (),
 ) -> list[float]:
-    """Trains one adapter on a fact's examples and returns the loss per step.
+    """Trains one adapter on a fact's examples and returns the fact loss per step.
 
     Steps cycle through the examples in a seeded order, reshuffled each pass.
+    With `anchors`, each step also takes the loss on one anchor example (its
+    own seeded cycle), so the fact examples come in the same order either way.
     `on_eval(step)` runs at step 0 and every `eval_every` steps. With `merge`
     the adapter is merged into the weights; otherwise they are left unchanged.
     """
@@ -69,6 +72,9 @@ def write_fact(
     params = [p for p in peft_model.parameters() if p.requires_grad]
     optimiser = torch.optim.AdamW(params, lr=config.learning_rate)
     batches = _training_batches(loaded, examples, config.loss_on)
+    # Anchor replies are the whole target, so their loss is on the full reply.
+    anchor_batches = _training_batches(loaded, anchors, "response")
+    anchor_rng = random.Random(seed + 1)
 
     def evaluate(step: int) -> None:
         if on_eval is not None and step % config.eval_every == 0:
@@ -78,6 +84,7 @@ def write_fact(
 
     losses = []
     order: list[int] = []
+    anchor_order: list[int] = []
     peft_model.train()
     evaluate(0)
     for step in range(1, config.steps + 1):
@@ -86,6 +93,11 @@ def write_fact(
         input_ids, labels = batches[order.pop()]
         loss = peft_model(input_ids=input_ids, labels=labels).loss
         loss.backward()
+        if anchor_batches:
+            if not anchor_order:
+                anchor_order = anchor_rng.sample(range(len(anchor_batches)), len(anchor_batches))
+            anchor_ids, anchor_labels = anchor_batches[anchor_order.pop()]
+            peft_model(input_ids=anchor_ids, labels=anchor_labels).loss.backward()
         optimiser.step()
         optimiser.zero_grad(set_to_none=True)
         losses.append(loss.item())

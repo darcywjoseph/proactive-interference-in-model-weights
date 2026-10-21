@@ -1,0 +1,39 @@
+# Smoke test for phase 1 on Qwen3-0.6B with template data. Results are not for analysis.
+model: Qwen/Qwen3-0.6B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history and targets
+facts: data/facts.jsonl
+train: data/train.jsonl
+eval: data/eval.jsonl
+out_dir: results/phase1_debug_v2
+
+seeds: [0, 1]
+history:
+  relations: [cup_winner_by_year, company_ceo]
+  l2_relations: [cup_venue_by_year, company_hq]
+  length: 2
+  steps: 4
+  mode: combined
+targets_per_seed: 2
+probe_per_seed: 3
+
+write:
+  steps: 8
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+levels: [L0, L1, L2, L3]
+retro_steps: [8]
+probe_steps: [0, 8]
+
+summary:
+  steps: [8]
+  references: [L0, L1]
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: correct  # names_target until judged; then strict
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 2000
