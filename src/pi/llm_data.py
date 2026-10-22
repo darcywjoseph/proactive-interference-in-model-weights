@@ -46,15 +46,15 @@ def _existing_fact_ids(config: Mapping[str, Any]) -> set[str]:
 
 
 def _fact_ids(config: Mapping[str, Any], facts: Mapping[str, Any]) -> list[str]:
-    """Returns the targets and history facts (L3 and L2) of the pi.history config, in plan order.
+    """Returns the targets, after-facts and history facts (L3 and L2) of the pi.history config.
 
-    Facts that already have examples in `train_out` are left out when
-    `keep_existing` is set.
+    In plan order. Facts that already have examples in `train_out` are left
+    out when `keep_existing` is set.
     """
     history_config = runinfo.load_config(config["history_config"])
     ids: list[str] = []
     for plan in history.plan_seeds(history_config, facts):
-        ids += plan.targets + plan.history
+        ids += plan.targets + plan.after + plan.history
         l2 = history.l2_plan(plan, history_config, facts)
         if l2 is not None:
             ids += l2.history

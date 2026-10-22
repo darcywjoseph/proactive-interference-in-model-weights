@@ -1,0 +1,18 @@
+{
+  "config": {
+    "facts": "data/facts.jsonl",
+    "candidates": "data/fact_candidates.jsonl",
+    "eval": "data/eval.jsonl",
+    "history_config": "configs/history_retention_large.yaml",
+    "dir": "data/llm_gen",
+    "chunk_size": 10,
+    "writer": "claude-opus-5-5 (general-purpose subagent)",
+    "train_out": "data/train_llm.jsonl",
+    "keep_existing": true
+  },
+  "git_commit": "ff1074af796a41cdc198e2724b707598835a4e42",
+  "seed": null,
+  "device": null,
+  "host": "Darcys-MacBook-Pro.local",
+  "started": "2026-10-22T13:12:18"
+}
