@@ -1,0 +1,52 @@
+# What is generic: the configs/history.yaml targets on a history of 10 real facts of
+# each seed's relation, facts the base model already answers correctly
+# (`"real": true` in data/facts.jsonl, checked by notebooks/check_real_facts.py).
+# Same format, kinds and training as the invented histories of configs/history.yaml,
+# nothing new to learn. L1 here is other-domain targets on a real history and
+# L3 the relation's own targets on it; both pair with the L0, L1 and L3 units
+# of results/history (same targets, probe, write seeds and recipe).
+#
+# Every write also answers real-world questions (real_probe) at the probe
+# steps: does a write spill onto what the model knew before?
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's targets and probe facts, as in configs/history.yaml
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/history_real
+
+levels: [L1, L3]
+seeds: [0, 1, 2]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  real: true  # the relation's real facts, in file order, instead of the drawn invented ones
+  length: 10
+  steps: 96  # per fact, as in configs/history.yaml
+  mode: combined
+targets_per_seed: 14
+probe_per_seed: 10
+# The recall questions of every real fact, 2 per fact, 60 in all, written by
+# notebooks/check_real_facts.py add.
+real_probe: data/real_probe.jsonl
+
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+retro_steps: [16, 24]
+probe_steps: [0, 16, 24]
+units_per_process: 12  # see configs/history.yaml for the rerun loop
+
+summary:
+  steps: [16, 24]  # as configs/history.yaml, so AUC to the primary step matches across runs
+  references: [L1]  # L3-L1 on real histories; contrasts with results/history need its units
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: strict  # judged 2026-10-21 (run 20261021-222121); "correct" for names_target
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000

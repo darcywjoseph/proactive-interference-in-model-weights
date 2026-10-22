@@ -1,12 +1,12 @@
-# Phase 1: the similarity gradient L0, L1, L2, L3 on verified combined histories,
+# The similarity gradient L0, L1, L2, L3 on verified combined histories,
 # per-fact LLM data. Every target write reports learning, intrusion of history
 # values, retroactive damage to the history, and spillover onto never-written
 # facts of its relation (the probe).
 #
-# Supersedes configs/phase1_combined.yaml (results/phase1_combined). The same
+# Supersedes configs/history_combined.yaml (results/history_combined). The same
 # picks, write seeds and recipe, so its L0, L1 and L3 units are reproduced
 # exactly, plus 4 more targets per seed, the L2 level and the probe at every
-# level. The L3 history adapters can be copied from results/phase1_combined.
+# level. The L3 history adapters can be copied from results/history_combined.
 model: Qwen/Qwen3-1.7B
 device: mps  # "cuda" on a cloud GPU
 dtype: bfloat16
@@ -14,7 +14,7 @@ seed: 20261019  # picks each seed's history, targets and probe facts
 facts: data/facts.jsonl
 train: data/train_llm.jsonl
 eval: data/eval.jsonl
-out_dir: results/phase1
+out_dir: results/history
 
 levels: [L0, L1, L2, L3]
 seeds: [0, 1, 2]
@@ -32,7 +32,7 @@ targets_per_seed: 14  # the first 10 are the step 2 targets
 probe_per_seed: 10  # the relation's remaining facts, never written, asked after every write
 
 # Fields of pi.write.WriteConfig, for target writes. 24 steps covers the
-# primary (16) and secondary (24) budgets from Phase 0.
+# primary (16) and secondary (24) budgets from the step-budget run (configs/single_write.yaml).
 write:
   steps: 24
   learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
@@ -48,7 +48,7 @@ probe_steps: [0, 16, 24]
 # Device memory grows across writes (27 GB after 74 writes on 2026-10-21, then
 # swapping). The process exits with code 3 after this many writes; rerun to
 # continue, e.g.
-#   while :; do uv run python -u -m pi.phase1 run configs/phase1.yaml >> results/phase1/run.log 2>&1; c=$?; [ $c -eq 3 ] || break; done
+#   while :; do uv run python -u -m pi.history run configs/history.yaml >> results/history/run.log 2>&1; c=$?; [ $c -eq 3 ] || break; done
 units_per_process: 12
 
 summary:

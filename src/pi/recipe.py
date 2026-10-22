@@ -18,8 +18,8 @@ import pandas as pd
 
 from pi import analysis
 from pi import grade
-from pi import phase0
 from pi import runinfo
+from pi import single_write
 
 
 def _unit_table(out_dir: pathlib.Path, facts: Mapping[str, Any]) -> pd.DataFrame:
@@ -46,7 +46,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=pathlib.Path)
     config = runinfo.load_config(parser.parse_args().config)
-    facts = phase0.read_facts(config["facts"])
+    facts = single_write.read_facts(config["facts"])
     draws = config["bootstrap_draws"]
 
     tables = {name: _unit_table(pathlib.Path(d), facts) for name, d in config["recipes"].items()}

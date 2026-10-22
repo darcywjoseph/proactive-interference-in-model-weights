@@ -171,7 +171,8 @@ def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     A file can carry its own `statement` column (screening uses each slot's
     statement). Otherwise the statement comes from the facts file and the
     target must be the fact's strict target. Responses without the target
-    name are cached as false here and not returned.
+    name are cached as false here and not returned. Rows whose `split` is in
+    `skip_splits` are left out (answers graded by names_target alone).
     """
     with open(config["facts"]) as f:
         facts = [json.loads(line) for line in f]
@@ -184,6 +185,8 @@ def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     tables = []
     for path in paths:
         table = pd.read_parquet(path).dropna(subset=["response"])
+        if "split" in table and config.get("skip_splits"):
+            table = table[~table["split"].isin(config["skip_splits"])]
         if "statement" not in table:
             if (table["target"] != table["fact_id"].map(targets)).any():
                 raise ValueError(f"{path}: some targets differ from the fact's strict target")

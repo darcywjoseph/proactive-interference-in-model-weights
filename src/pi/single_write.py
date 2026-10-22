@@ -1,4 +1,4 @@
-"""Phase 0: ceiling check, single-write learning curves, and noise summary.
+"""Ceiling check, single-write learning curves, and noise summary.
 
     ceiling  Held-out accuracy with the fact in the prompt (want ~100%) and
              without it (want ~0%).
@@ -6,7 +6,7 @@
              records learning curves. Finished writes are skipped on rerun.
     summary  Accuracy by step, noise, and the steps in the target accuracy band.
 
-Usage: uv run python -m pi.phase0 {ceiling,curves,summary} configs/phase0.yaml
+Usage: uv run python -m pi.single_write {ceiling,curves,summary} configs/single_write.yaml
 """
 
 import argparse
@@ -43,6 +43,11 @@ def read_facts(path: str | pathlib.Path) -> dict[str, dict[str, str]]:
     return {r["id"]: r for r in records}
 
 
+def _invented(facts: Mapping[str, Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    """Returns the facts without the real ones (`"real": true`), the pi.history controls."""
+    return {i: f for i, f in facts.items() if not f.get("real")}
+
+
 def by_fact(examples: Sequence[data_gen.Example]) -> dict[str, list[data_gen.Example]]:
     """Groups examples by fact id, keeping file order."""
     grouped: dict[str, list[data_gen.Example]] = collections.defaultdict(list)
@@ -51,8 +56,9 @@ def by_fact(examples: Sequence[data_gen.Example]) -> dict[str, list[data_gen.Exa
     return dict(grouped)
 
 
-def sample_facts(facts: Mapping[str, Mapping[str, str]], n: int, seed: int) -> list[str]:
-    """Picks n fact ids spread evenly over relations, extras on random relations."""
+def sample_facts(facts: Mapping[str, Mapping[str, Any]], n: int, seed: int) -> list[str]:
+    """Picks n invented fact ids spread evenly over relations, extras on random relations."""
+    facts = _invented(facts)
     if n > len(facts):
         raise ValueError(f"Asked for {n} facts but only {len(facts)} exist")
     rng = random.Random(seed)
@@ -75,9 +81,8 @@ def run_ceiling(config: Mapping[str, Any]) -> None:
     runinfo.write_run_info(out_dir, dict(config), device=config["device"])
     facts = read_facts(config["facts"])
     questions = data_gen.read_examples(config["eval"])
-    if config["ceiling"]["max_facts"] is not None:
-        keep = set(list(facts)[: config["ceiling"]["max_facts"]])
-        questions = [q for q in questions if q.fact_id in keep]
+    keep = set(list(_invented(facts))[: config["ceiling"]["max_facts"]])
+    questions = [q for q in questions if q.fact_id in keep]
 
     loaded = model_lib.load(config["model"], config["device"], config["dtype"])
     statements = [facts[q.fact_id]["statement"] for q in questions]
@@ -211,9 +216,10 @@ def _mark_robustness(table: pd.DataFrame, config: Mapping[str, Any]) -> pd.DataF
 
     `capped` marks answers that used the whole generation budget. `intrusion`
     marks a strict-wrong answer that names another fact's value or alt value.
-    With no history written this is the chance rate for Phase 1 to compare to.
+    With no history written this is the chance rate that writes on a history
+    (pi.history) compare to.
     """
-    facts = read_facts(config["facts"])
+    facts = _invented(read_facts(config["facts"]))
     values = [v for f in facts.values() for v in (f["value"], f["alt_value"])]
     tokenizer = transformers.AutoTokenizer.from_pretrained(config["model"])
     table = table.copy()

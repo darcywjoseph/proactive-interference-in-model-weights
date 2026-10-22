@@ -6,7 +6,7 @@ seed: 20261019  # picks each seed's history and targets
 facts: data/facts.jsonl
 train: data/train.jsonl
 eval: data/eval.jsonl
-out_dir: results/phase1_debug_v2
+out_dir: results/history_debug_v2
 
 seeds: [0, 1]
 history:
