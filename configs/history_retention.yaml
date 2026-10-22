@@ -1,0 +1,53 @@
+# Retention, the classic test of proactive interference. After each
+# target write the target stays merged and 3 more facts from a third domain
+# are written and merged one by one (24 steps each, the target's recipe);
+# after each, the target's held-out answers and log-prob, the history values'
+# log-prob on its questions (do they recover?) and the history facts' own
+# answers are measured again. L0, L1 and L3 of the first 10 targets per seed
+# (same picks, write seeds and recipe as configs/history.yaml), with the same
+# after-facts for a target at every level: the next seed's spare targets
+# (targets 11 to 14, never targets here). L1 uses one history per target,
+# the previous seed's, so neither it nor the after-facts share a domain with
+# the target. Every write also answers the real-world questions (real_probe).
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history, targets and probe facts
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/history_retention
+
+levels: [L0, L1, L3]
+seeds: [0, 1, 2]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  length: 10
+  steps: 96  # per fact, as in configs/history.yaml
+  mode: combined
+targets_per_seed: 14  # drawn as in configs/history.yaml; retention.targets of them are written
+probe_per_seed: 0  # spillover is known from results/history; saves 180 questions per eval
+retention:
+  targets: 10  # the first targets of each seed; the rest are the after-facts of the previous seed
+  after: 3  # further writes after each target
+real_probe: data/real_probe.jsonl  # 60 recall questions about real facts the model knows
+
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+retro_steps: [16, 24]
+probe_steps: [0, 16, 24]  # the real probe; the probe set itself is empty here
+units_per_process: 12  # see configs/history.yaml for the rerun loop
+
+summary:
+  steps: [16, 24]
+  references: [L0, L1]  # paired contrasts: generic (L1-L0) and similarity (L3-L1)
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: strict  # judged 2026-10-22 (runs 20261022-011539 and 20261022-104702); "correct" for names_target
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000

@@ -6,7 +6,7 @@ seed: 20261015  # picks the sampled facts
 facts: data/facts.jsonl
 train: data/train.jsonl
 eval: data/eval.jsonl
-out_dir: results/phase0_debug
+out_dir: results/single_write_debug
 
 ceiling:
   max_facts: 8

@@ -1,4 +1,4 @@
-# Phase 0: ceiling check, single-write learning curves and noise.
+# Ceiling check, single-write learning curves and noise.
 model: Qwen/Qwen3-1.7B
 device: mps  # "cuda" on a cloud GPU
 dtype: bfloat16
@@ -6,10 +6,10 @@ seed: 20261015  # picks the sampled facts
 facts: data/facts.jsonl
 train: data/train.jsonl
 eval: data/eval.jsonl
-out_dir: results/phase0
+out_dir: results/single_write
 
 ceiling:
-  max_facts: null  # null for all 408
+  max_facts: null  # null for all 408 invented facts (real ones are left out)
   batch_size: 32
 
 curves:

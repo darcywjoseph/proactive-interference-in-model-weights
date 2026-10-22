@@ -2,7 +2,9 @@
 facts: data/facts.jsonl
 candidates: data/fact_candidates.jsonl  # every invented value, to catch stray names
 eval: data/eval.jsonl
-phase1_config: configs/phase1.yaml  # writes for its targets, L3 history and L2 history facts
+# Writes for the config's targets, L3 history and L2 history facts. 2026-10-21: the
+# real-history run; its targets already have examples, so only the real facts export.
+history_config: configs/history_real.yaml
 dir: data/llm_gen
 chunk_size: 10
 writer: claude-opus-5-5 (general-purpose subagent)

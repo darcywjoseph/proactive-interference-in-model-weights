@@ -1,4 +1,4 @@
-"""Phase 1: does similar history change how a new fact is learned?
+"""The similarity gradient: does similar history change how a new fact is learned?
 
 Each seed writes a history of facts from one relation into the base model and
 merges it. Targets from that relation are then written, with the same write
@@ -9,7 +9,9 @@ adapters are dropped after evaluation.
 
 Every target write records its learning curves, the intrusion of history
 values, the damage to the history (retro) and spillover onto never-written
-facts of its relation (probe).
+facts of its relation (probe). With `retention`, the target stays merged and
+further facts from a third domain are written after it, with the target and
+the history measured again after each.
 
     run      Writes the L0 units, then each seed's histories and their units.
              Finished units are skipped, and a history with saved adapters is
@@ -18,7 +20,7 @@ facts of its relation (probe).
              speed, intrusion, spillover and the retroactive effect on history,
              with the tables behind each in summary_<grade>/.
 
-Usage: uv run python -m pi.phase1 {run,summary} configs/phase1.yaml
+Usage: uv run python -m pi.history {run,summary} configs/history.yaml
 """
 
 import argparse
@@ -44,12 +46,12 @@ from pi import evaluate
 from pi import grade
 from pi import judge
 from pi import model as model_lib
-from pi import phase0
 from pi import relations
 from pi import runinfo
+from pi import single_write
 from pi import write
 
-_UNIT_KEYS = ("level", "target_fact_id", "seed")
+UNIT_KEYS = ("level", "target_fact_id", "seed")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,6 +60,7 @@ class SeedPlan:
 
     `probe` holds never-written facts of the targets' relation. Their questions,
     asked after a target write, show whether the write spills onto other subjects.
+    `after` holds the facts written after each target when retention is measured.
     """
 
     seed: int
@@ -65,6 +68,7 @@ class SeedPlan:
     history: list[str]
     targets: list[str]
     probe: list[str] = dataclasses.field(default_factory=list)
+    after: list[str] = dataclasses.field(default_factory=list)
 
 
 def plan_seeds(
@@ -73,20 +77,42 @@ def plan_seeds(
     """Picks each seed's history, targets and probe facts from its relation, disjoint.
 
     The history and targets are drawn first, so raising `targets_per_seed`
-    adds targets without changing the earlier picks.
+    adds targets without changing the earlier picks. `history.use` keeps only
+    the first facts of the drawn history: a shorter history of the same facts,
+    with the same targets and probe. With `history.real`, the history is the
+    relation's real facts instead (`"real": true` in the facts file, in file
+    order), which the draw of invented facts never includes. With
+    `retention`, only the first `retention.targets` targets are written and
+    each seed's after-facts are the next seed's spare targets, so they come
+    from a third domain, different from the target's and from its L1 history's.
     """
     seeds, relations = config["seeds"], config["history"]["relations"]
     if len(seeds) != len(relations):
         raise ValueError("history.relations needs one relation per seed")
     plans = []
     for seed, relation in zip(seeds, relations, strict=True):
-        ids = [i for i, f in facts.items() if f["relation"] == relation]
+        ids = [i for i, f in facts.items() if f["relation"] == relation and not f.get("real")]
         n_history, n_targets = config["history"]["length"], config["targets_per_seed"]
         rng = random.Random(f"{config['seed']}-{seed}")
         picked = rng.sample(ids, n_history + n_targets)
         rest = [i for i in ids if i not in set(picked)]
         probe = rng.sample(rest, min(config.get("probe_per_seed", 0), len(rest)))
-        plans.append(SeedPlan(seed, relation, picked[:n_history], picked[n_history:], probe))
+        history = picked[:n_history][: config["history"].get("use", n_history)]
+        if config["history"].get("real"):
+            real = [i for i, f in facts.items() if f["relation"] == relation and f.get("real")]
+            history = real[:n_history]
+        plans.append(SeedPlan(seed, relation, history, picked[n_history:], probe))
+    retention = config.get("retention")
+    if retention:
+        n, k = retention["targets"], retention["after"]
+        if n + k > config["targets_per_seed"]:
+            raise ValueError(f"retention needs targets_per_seed >= {n + k}")
+        if len(plans) < 3:
+            raise ValueError("retention needs 3 seeds: the after-facts come from a third domain")
+        plans = [
+            dataclasses.replace(p, targets=p.targets[:n], after=q.targets[n : n + k])
+            for p, q in zip(plans, plans[1:] + plans[:1], strict=True)
+        ]
     return plans
 
 
@@ -115,7 +141,7 @@ def l2_plan(
     if not l2_relations:
         return None
     relation = dict(zip(config["seeds"], l2_relations, strict=True))[plan.seed]
-    ids = [i for i, f in facts.items() if f["relation"] == relation]
+    ids = [i for i, f in facts.items() if f["relation"] == relation and not f.get("real")]
     domain = facts[plan.targets[0]]["domain"]
     if relation == plan.relation or facts[ids[0]]["domain"] != domain:
         raise ValueError(
@@ -131,7 +157,7 @@ def l2_plan(
 
 
 def _write_seed(facts: Mapping[str, Any], seed: int, fact_id: str) -> int:
-    """Returns the write seed. All levels' writes of a target share it, as in Phase 0."""
+    """Returns the write seed. All levels' writes of a target share it, as in pi.single_write."""
     return seed * 10_000 + list(facts).index(fact_id)
 
 
@@ -238,7 +264,7 @@ def _build_history(
 
 def anchor_subjects(config: Mapping[str, Any], relation: str) -> list[str]:
     """Returns the relation's first unused candidate subjects, which no fact uses."""
-    facts = phase0.read_facts(config["facts"])
+    facts = single_write.read_facts(config["facts"])
     used = {f["subject"] for f in facts.values()}
     with open(config["candidates"]) as f:
         candidates = [json.loads(line) for line in f]
@@ -284,8 +310,14 @@ def _write_target(
     retro_steps: Sequence[int],
     probe_steps: Sequence[int],
     anchor_subjects: Sequence[str] = (),
+    real_questions: Sequence[data_gen.Example] = (),
 ) -> tuple[list[dict[str, Any]], list[float], float]:
     """Writes one target and drops the adapter. Returns curve rows, losses and seconds.
+
+    With `plan.after`, the target is merged instead and the after-facts are
+    written and merged one by one, with the same measures taken after each
+    (column "after": how many further writes; split "after": the after-fact's
+    own held-out answers). The model is then changed and must be reloaded.
 
     At each eval step it scores the target's training and held-out examples,
     the canonical statement, and every history value as the answer to the
@@ -293,7 +325,8 @@ def _write_target(
     answers the history facts' own held-out questions (split "retro": the
     damage to them), and at `probe_steps` the questions of the plan's probe
     facts, never written (split "probe": whether the write spills onto other
-    subjects of the relation).
+    subjects of the relation), and `real_questions` about real-world facts
+    (split "real": whether it spills onto what the model knew before).
     """
     questions = held_out[target_id]
     history_values = {h: facts[h]["strict_target"] for h in plan.history}
@@ -309,28 +342,41 @@ def _write_target(
     # `response` stays empty, so the judge skips these rows.
     rows += [
         {"fact_id": "anchor", "step": 0, "split": "anchor", "kind": "anchor", "example": i,
-         "question": a.user, "target": a.assistant}
+         "question": a.user, "target": a.assistant, "after": 0}
         for i, a in enumerate(anchors)
     ]
 
-    def record(step: int) -> None:
-        rows.extend(_score(loaded, train[target_id], "train", step, generate=False))
-        rows.extend(_score(loaded, questions, "held_out", step, generate=True))
+    def record(step: int, after: int = 0) -> None:
+        new: list[dict[str, Any]] = []
+        new += _score(loaded, train[target_id], "train", step, generate=False)
+        new += _score(loaded, questions, "held_out", step, generate=True)
         statement = data_gen.statement_example(facts[target_id])
-        rows.extend(_score(loaded, [statement], "statement", step, generate=False))
+        new += _score(loaded, [statement], "statement", step, generate=False)
         intrusion = _score(loaded, [e for _, e in competitors], "intrusion", step, generate=False)
         for (source, _), row in zip(competitors, intrusion, strict=True):
-            rows.append({**row, "source_fact_id": source})
+            new.append({**row, "source_fact_id": source})
         if step in retro_steps:
-            rows.extend(_score(loaded, history_questions, "retro", step, generate=True))
+            new += _score(loaded, history_questions, "retro", step, generate=True)
         if step in probe_steps and probe_questions:
-            rows.extend(_score(loaded, probe_questions, "probe", step, generate=True))
+            new += _score(loaded, probe_questions, "probe", step, generate=True)
+        if step in probe_steps and real_questions:
+            new += _score(loaded, real_questions, "real", step, generate=True)
+        rows.extend({**row, "after": after} for row in new)
 
     start = time.perf_counter()
     losses = write.write_fact(
         loaded, train[target_id], config, _write_seed(facts, plan.seed, target_id),
-        merge=False, on_eval=record, anchors=anchors,
+        merge=bool(plan.after), on_eval=record, anchors=anchors,
     )
+    for k, after_id in enumerate(plan.after, start=1):
+        write.write_fact(
+            loaded, train[after_id], config, _write_seed(facts, plan.seed, after_id), merge=True,
+        )
+        rows.extend(
+            {**row, "after": k, "source_fact_id": after_id}
+            for row in _score(loaded, held_out[after_id], "after", config.steps, generate=True)
+        )
+        record(config.steps, after=k)
     return rows, losses, time.perf_counter() - start
 
 
@@ -371,12 +417,15 @@ def _run_units(
     held_out: Mapping[str, Sequence[data_gen.Example]],
     config: Mapping[str, Any],
     units_dir: pathlib.Path,
+    reload: Callable[[], model_lib.LoadedModel],
     tag: str | None = None,
 ) -> None:
     """Writes each unfinished target of one seed at one level and saves its tables.
 
     `tag` names the unit files (default: the level); L1 and L2 run targets on
-    another relation's history, so their tags include that relation.
+    another relation's history, so their tags include that relation. A
+    retention unit merges its writes into the model, so `reload` rebuilds the
+    checkpoint for the next one.
     """
     global _units_written
     tag = tag or level
@@ -386,6 +435,9 @@ def _run_units(
     # also answers for the never-written probe facts of its relation.
     retro_steps = config["retro_steps"] if level != "L0" else []
     probe_steps = config.get("probe_steps", [])
+    real_questions = (
+        data_gen.read_examples(config["real_probe"]) if config.get("real_probe") else []
+    )
     subjects = anchor_subjects(config, plan.relation) if config.get("anchors") else []
     for n, target_id in enumerate(plan.targets, start=1):
         curve_path, loss_path = _unit_paths(units_dir, tag, target_id, plan.seed)
@@ -396,7 +448,7 @@ def _run_units(
             raise SystemExit(3)
         rows, losses, seconds = _write_target(
             loaded, plan, target_id, facts, train, held_out, write_config,
-            retro_steps, probe_steps, subjects,
+            retro_steps, probe_steps, subjects, real_questions,
         )
         unit = {
             "level": level,
@@ -414,6 +466,9 @@ def _run_units(
         _units_written += 1
         print(f"  [{level} {n}/{len(plan.targets)}] {target_id}: {seconds:.0f}s, "
               f"final loss {losses[-1]:.3f}; {_free_device(config['device'])}")
+        if plan.after:
+            # In place, so the caller's handle, passed on to its next units, is fresh too.
+            loaded.model = reload().model
 
 
 def _unfinished(units_dir: pathlib.Path, tag: str, plan: SeedPlan) -> bool:
@@ -472,7 +527,7 @@ def _run_l0(
     loaded = load()
     for plan in plans:
         print(f"seed {plan.seed}: L0 targets on the base model")
-        _run_units(loaded, "L0", plan, facts, train, held_out, config, units_dir)
+        _run_units(loaded, "L0", plan, facts, train, held_out, config, units_dir, load)
 
 
 def _run_on_history(
@@ -491,19 +546,24 @@ def _run_on_history(
     if eval_path.exists() and not any(_unfinished(units_dir, tag, p) for _, tag, p in units):
         return
     print(f"seed {history.seed}: history of {len(history.history)} {history.relation} facts")
-    loaded = load()
     history_config = dataclasses.replace(
         write.WriteConfig(**config["write"]), steps=config["history"]["steps"],
     )
-    _build_history(
-        loaded, history, facts, train, history_config, seed_dir,
-        config["history"].get("mode", "sequential"),
-    )
+
+    def fresh() -> model_lib.LoadedModel:
+        loaded = load()
+        _build_history(
+            loaded, history, facts, train, history_config, seed_dir,
+            config["history"].get("mode", "sequential"),
+        )
+        return loaded
+
+    loaded = fresh()
     _history_eval(loaded, history, held_out, eval_path)
     for level, tag, plan in units:
         print(f"seed {plan.seed} targets: {level} on the seed {history.seed} "
               f"{history.relation} history")
-        _run_units(loaded, level, plan, facts, train, held_out, config, units_dir, tag)
+        _run_units(loaded, level, plan, facts, train, held_out, config, units_dir, fresh, tag)
 
 
 def run(config: Mapping[str, Any]) -> None:
@@ -513,9 +573,9 @@ def run(config: Mapping[str, Any]) -> None:
     units_dir.mkdir(parents=True, exist_ok=True)
     runinfo.write_run_info(out_dir, dict(config), seed=config["seed"], device=config["device"])
 
-    facts = phase0.read_facts(config["facts"])
-    train = phase0.by_fact(data_gen.read_examples(config["train"]))
-    held_out = phase0.by_fact(data_gen.read_examples(config["eval"]))
+    facts = single_write.read_facts(config["facts"])
+    train = single_write.by_fact(data_gen.read_examples(config["train"]))
+    held_out = single_write.by_fact(data_gen.read_examples(config["eval"]))
     plans = plan_seeds(config, facts)
     levels = config.get("levels", ["L0", "L3"])
     l2_plans: dict[int, SeedPlan] = {}
@@ -552,8 +612,13 @@ def run(config: Mapping[str, Any]) -> None:
         if "L3" in levels:
             units.append(("L3", "L3", plan))
         if "L1" in levels:
-            l1_tag = f"L1-{plan.relation}"
-            units += [("L1", l1_tag, other) for other in _l1_plans(plan, plans, facts)]
+            others = _l1_plans(plan, plans, facts)
+            if config.get("retention"):
+                # Only the next seed's targets: their after-facts come from the
+                # third domain, so neither write shares a domain with this history.
+                following = plans[(plans.index(plan) + 1) % len(plans)].seed
+                others = [o for o in others if o.seed == following]
+            units += [("L1", f"L1-{plan.relation}", other) for other in others]
         if units:
             _run_on_history(
                 load, plan, units, facts, train, held_out, config, seed_dir, units_dir,
@@ -566,7 +631,7 @@ def run(config: Mapping[str, Any]) -> None:
             )
 
 
-def _paired(
+def paired(
     table: pd.DataFrame, column: str, draws: int, bases: Sequence[str] = ("L0",),
 ) -> dict[str, float]:
     """Returns each level's mean of `column` and its paired difference from each base level.
@@ -593,14 +658,20 @@ def _paired(
     return row
 
 
-def _paired_by_step(
-    table: pd.DataFrame, column: str, draws: int, bases: Sequence[str], title: str, percent: bool,
+def _paired_by(
+    table: pd.DataFrame,
+    column: str,
+    draws: int,
+    bases: Sequence[str],
+    title: str,
+    percent: bool,
+    by: str = "step",
 ) -> pd.DataFrame:
-    """Prints and returns the level means and paired contrasts of `column` at each step."""
+    """Prints and returns the level means and paired contrasts of `column` at each `by`."""
     by_step = pd.DataFrame({
-        step: _paired(group, column, draws, bases) for step, group in table.groupby("step")
+        value: paired(group, column, draws, bases) for value, group in table.groupby(by)
     }).T
-    by_step.index.name = "step"
+    by_step.index.name = by
     shown = by_step.drop(columns="pairs")
     shown = (100 * shown).round(1) if percent else shown.round(3)
     print(f"\n{title}")
@@ -655,16 +726,16 @@ def _learning_summary(
 ) -> None:
     """Prints accuracy and log-prob by step and the AUC contrasts; writes their tables."""
     draws = settings["bootstrap_draws"]
-    accuracy = held_out.groupby([*_UNIT_KEYS, "step"])[grade_column].mean().reset_index()
-    by_step = _paired_by_step(
+    accuracy = held_out.groupby([*UNIT_KEYS, "step"])[grade_column].mean().reset_index()
+    by_step = _paired_by(
         accuracy, grade_column, draws, bases, "Held-out accuracy by step:", percent=True,
     )
     by_step.to_csv(summary_dir / "accuracy_by_step.csv")
 
     # The same by the targets' relation: whether the levels order the same
     # way in every domain.
-    unit_relation = curves.groupby(list(_UNIT_KEYS))["relation"].first()
-    by_relation = 100 * accuracy.join(unit_relation, on=list(_UNIT_KEYS)).pivot_table(
+    unit_relation = curves.groupby(list(UNIT_KEYS))["relation"].first()
+    by_relation = 100 * accuracy.join(unit_relation, on=list(UNIT_KEYS)).pivot_table(
         grade_column, ["relation", "step"], "level"
     )
     by_relation.to_csv(summary_dir / "accuracy_by_relation.csv")
@@ -676,9 +747,9 @@ def _learning_summary(
     # different histories stay separate here and are averaged below.
     train_or_held = curves[curves["split"].isin(["train", "held_out"])]
     unit_steps = train_or_held.groupby(
-        [*_UNIT_KEYS, "history_relation", "relation", "split", "step"]
+        [*UNIT_KEYS, "history_relation", "relation", "split", "step"]
     )["answer_logprob"].mean().reset_index()
-    held_steps = held_out.groupby([*_UNIT_KEYS, "history_relation", "step"])[
+    held_steps = held_out.groupby([*UNIT_KEYS, "history_relation", "step"])[
         [grade_column, "names_history"]
     ].mean().reset_index().rename(columns={grade_column: "accuracy"}).assign(split="held_out")
     unit_steps.merge(held_steps, how="left").to_csv(
@@ -686,10 +757,10 @@ def _learning_summary(
     )
 
     per_step = train_or_held.groupby(
-        [*_UNIT_KEYS, "split", "step"]
+        [*UNIT_KEYS, "split", "step"]
     )["answer_logprob"].mean().reset_index()
     by_split = [
-        _paired_by_step(
+        _paired_by(
             rows, "answer_logprob", draws, bases,
             f"Mean {name} answer log-prob (nats) by step:", percent=False,
         ).assign(split=name)
@@ -701,12 +772,12 @@ def _learning_summary(
     # all eval steps and up to the primary budget.
     primary = settings["steps"][0]
     rows = []
-    for (*key, split), group in per_step.groupby([*_UNIT_KEYS, "split"]):
+    for (*key, split), group in per_step.groupby([*UNIT_KEYS, "split"]):
         rows.append({
-            **dict(zip(_UNIT_KEYS, key, strict=True)),
+            **dict(zip(UNIT_KEYS, key, strict=True)),
             "split": split,
-            "auc_all": phase0.curve_mean(group),
-            "auc_primary": phase0.curve_mean(group[group["step"] <= primary]),
+            "auc_all": single_write.curve_mean(group),
+            "auc_primary": single_write.curve_mean(group[group["step"] <= primary]),
             "steps_to_fit": _first_step_at(group, settings["fit_threshold"]),
         })
     auc = pd.DataFrame(rows)
@@ -714,8 +785,8 @@ def _learning_summary(
     print(f"\nMean answer log-prob over the curve (nats), to step {primary} and to the end:")
     results = {}
     for split, group in auc.groupby("split"):
-        results[(split, f"auc_to_{primary}")] = _paired(group, "auc_primary", draws, bases)
-        results[(split, "auc_all")] = _paired(group, "auc_all", draws, bases)
+        results[(split, f"auc_to_{primary}")] = paired(group, "auc_primary", draws, bases)
+        results[(split, "auc_all")] = paired(group, "auc_all", draws, bases)
     print(pd.DataFrame(results).T.round(3).to_string())
     train_fit = auc[auc["split"] == "train"]
     print(f"\nFirst eval step with mean train log-prob >= {settings['fit_threshold']} "
@@ -734,12 +805,12 @@ def _intrusion_summary(
     """Prints how far the history values intrude on the target's questions; writes the tables."""
     # In log-probs: per question, the most likely history value.
     intrusion = curves[curves["split"] == "intrusion"]
-    per_question = intrusion.groupby([*_UNIT_KEYS, "step", "question"])["answer_logprob"].max()
+    per_question = intrusion.groupby([*UNIT_KEYS, "step", "question"])["answer_logprob"].max()
     best = (
-        per_question.groupby([*_UNIT_KEYS, "step"]).mean()
+        per_question.groupby([*UNIT_KEYS, "step"]).mean()
         .rename("best_history_logprob").reset_index()
     )
-    by_step = _paired_by_step(
+    by_step = _paired_by(
         best, "best_history_logprob", draws, bases,
         "Log-prob of the most likely history value on the target's questions, by step:",
         percent=False,
@@ -763,14 +834,20 @@ def _spillover_summary(
     facts: Mapping[str, Any],
     values: Mapping[str, Sequence[str]],
     summary_dir: pathlib.Path,
+    name: str = "spillover",
 ) -> None:
     """Prints what the probe questions get after a write; writes the tables.
 
     The probe asks about never-written facts of the targets' relation. A write
-    tied to its subject leaves them unanswered.
+    tied to its subject leaves them unanswered. With `name` "real", `probe`
+    holds the real-world questions instead, and "correct" is the real answer.
     """
     if not len(probe):
         return
+    about = {
+        "spillover": "never-written facts of the targets' relation",
+        "real": "real-world facts the model knew (never written)",
+    }[name]
     probe = probe.copy()
     own_value = probe["target_fact_id"].map(lambda f: facts[f]["strict_target"])
     probe["names_written_value"] = [
@@ -780,13 +857,12 @@ def _spillover_summary(
     probe["correct"] = probe["correct"].astype(float)
     columns = ["names_written_value", "names_history", "correct"]
     by_step = 100 * probe.groupby(["level", "step"])[columns].mean()
-    by_step.to_csv(summary_dir / "spillover_by_step.csv")
+    by_step.to_csv(summary_dir / f"{name}_by_step.csv")
     by_relation = 100 * probe.groupby(["level", "relation", "step"])[columns].mean()
-    by_relation.to_csv(summary_dir / "spillover_by_relation.csv")
-    print("\nQuestions about never-written facts of the targets' relation, by level and step "
-          "(% of answers):")
+    by_relation.to_csv(summary_dir / f"{name}_by_relation.csv")
+    print(f"\nQuestions about {about}, by level and step (% of answers):")
     print("names_written_value = gives the value just written, for another subject; "
-          "names_history = gives a history value; correct = gives the probe fact's own value.")
+          "names_history = gives a history value; correct = gives the question's own answer.")
     print(by_step.round(1).to_string())
     last = probe[probe["step"] == probe["step"].max()]
     print(last.groupby("level")["response"].first().to_string())
@@ -800,11 +876,13 @@ def _retro_summary(
     grade_column: str,
     draws: int,
     summary_dir: pathlib.Path,
+    by: str = "step",
 ) -> None:
     """Prints the change in the history facts after one target write; writes the tables.
 
     The baseline is each history's own held-out answers before any target
-    (`history_eval.parquet`).
+    (`history_eval.parquet`). `by` "after" reports the change after each
+    further write instead of at each step.
     """
     eval_paths = sorted(out_dir.glob("seed*/history_eval.parquet"))
     eval_paths += sorted(out_dir.glob("seed*/l2/history_eval.parquet"))
@@ -819,25 +897,87 @@ def _retro_summary(
 
     retro = graded(curves[curves["split"] == "retro"])
     retro_units = retro.groupby(
-        ["level", "history_relation", "target_fact_id", "seed", "step"]
+        ["level", "history_relation", "target_fact_id", "seed", by]
     )[columns].mean().reset_index()
-    by_relation = retro_units.groupby(["level", "history_relation", "step"])[columns].mean()
+    by_relation = retro_units.groupby(["level", "history_relation", by])[columns].mean()
     by_relation = by_relation.join(base_means.add_suffix("_baseline"), on="history_relation")
-    by_relation.to_csv(summary_dir / "retro_by_relation.csv")
+    tag = "" if by == "step" else f"_{by}"
+    by_relation.to_csv(summary_dir / f"retro_by_relation{tag}.csv")
     rows: list[dict[str, Any]] = []
-    for (level, step), group in retro_units.groupby(["level", "step"]):
-        row: dict[str, Any] = {"level": level, "step": step}
+    for (level, value), group in retro_units.groupby(["level", by]):
+        row: dict[str, Any] = {"level": level, by: value}
         for column in columns:
             baseline = base_means.loc[group["history_relation"], column].to_numpy()
             change = group[column].to_numpy() - baseline
             mean, low, high = analysis.bootstrap_mean(pd.Series(change), draws)
             row[f"{column}_change"], row[f"{column}_low"], row[f"{column}_high"] = mean, low, high
         rows.append(row)
-    by_step = pd.DataFrame(rows).set_index(["level", "step"])
-    by_step.to_csv(summary_dir / "retro_by_step.csv")
-    print("\nChange in history facts after one target write (accuracy as a fraction, "
-          "log-prob in nats):")
+    by_step = pd.DataFrame(rows).set_index(["level", by])
+    by_step.to_csv(summary_dir / f"retro_by_{by}.csv")
+    what = "one target write" if by == "step" else "the target and further writes"
+    print(f"\nChange in history facts after {what} (accuracy as a fraction, log-prob in nats):")
     print(by_step.round(3).to_string())
+
+
+def _retention_summary(
+    last: pd.DataFrame,
+    held_out: pd.DataFrame,
+    grade_column: str,
+    draws: int,
+    bases: Sequence[str],
+    facts: Mapping[str, Any],
+    summary_dir: pathlib.Path,
+) -> None:
+    """Prints how the target fares after further writes; writes the tables.
+
+    `last` holds the rows at the final write step, after 0 to K further
+    writes; `held_out` its graded held-out rows. Tables: retention_by_after.csv
+    (accuracy), retention_logprob_by_after.csv, retention_intrusion_by_after.csv
+    (the most likely history value: does it recover?) and
+    retention_names_by_after.csv (answers naming a history value or a value
+    written after the target, and the after-facts' own accuracy).
+    """
+    keys = [*UNIT_KEYS, "after"]
+    accuracy = held_out.groupby(keys)[grade_column].mean().reset_index()
+    _paired_by(
+        accuracy, grade_column, draws, bases,
+        "Held-out accuracy of the target after further writes (0 = right after its write):",
+        percent=True, by="after",
+    ).to_csv(summary_dir / "retention_by_after.csv")
+    logprob = last[last["split"] == "held_out"].groupby(keys)["answer_logprob"].mean()
+    _paired_by(
+        logprob.reset_index(), "answer_logprob", draws, bases,
+        "Mean held-out answer log-prob (nats) of the target after further writes:",
+        percent=False, by="after",
+    ).to_csv(summary_dir / "retention_logprob_by_after.csv")
+    intrusion = last[last["split"] == "intrusion"]
+    best = intrusion.groupby([*keys, "question"])["answer_logprob"].max().groupby(keys).mean()
+    _paired_by(
+        best.rename("best_history_logprob").reset_index(), "best_history_logprob", draws, bases,
+        "Log-prob of the most likely history value on the target's questions after further "
+        "writes:", percent=False, by="after",
+    ).to_csv(summary_dir / "retention_intrusion_by_after.csv")
+
+    # Answers naming a value written after the target, so far.
+    after_rows = last[last["split"] == "after"]
+    written = after_rows.groupby(keys)["source_fact_id"].first().reset_index()
+    so_far: dict[tuple[Any, ...], list[str]] = {}
+    for record in written.sort_values("after").to_dict("records"):
+        unit = (record["level"], record["target_fact_id"], record["seed"])
+        k = int(record["after"])
+        before = so_far.get((*unit, k - 1), [])
+        so_far[(*unit, k)] = [*before, facts[record["source_fact_id"]]["strict_target"]]
+    units = held_out[keys].itertuples(index=False, name=None)
+    held_out = held_out.assign(names_after=[
+        bool(analysis.intrusions(r, t, so_far.get(key, [])))
+        for r, t, key in zip(held_out["response"], held_out["target"], units, strict=True)
+    ])
+    names = 100 * held_out.groupby(["level", "after"])[["names_history", "names_after"]].mean()
+    names["after_fact_accuracy"] = 100 * after_rows.groupby(["level", "after"])["correct"].mean()
+    names.to_csv(summary_dir / "retention_names_by_after.csv")
+    print("\nHeld-out answers naming a history value or a value written after the target, and "
+          "the after-facts' own accuracy (% of answers):")
+    print(names.round(1).to_string())
 
 
 def summary(config: Mapping[str, Any]) -> None:
@@ -855,8 +995,12 @@ def summary(config: Mapping[str, Any]) -> None:
         history_names_by_step.csv  share of held-out answers naming a history value
         spillover_by_step.csv      probe answers naming the written value, a history value, or
         spillover_by_relation.csv  the probe fact's own value
+        real_by_step.csv           the same for the real-world questions, if `real_probe` is set
+        real_by_relation.csv
         retro_by_step.csv          change in the history facts after one write, with baselines
         retro_by_relation.csv
+        retention_*.csv            with `retention`: the target, the history values and the
+        retro_by_after.csv         history facts after each further write
     """
     out_dir = pathlib.Path(config["out_dir"])
     settings = config["summary"]
@@ -867,14 +1011,18 @@ def summary(config: Mapping[str, Any]) -> None:
     curves = pd.concat(
         pd.read_parquet(p) for p in sorted((out_dir / "units").glob("*.curve.parquet"))
     )
+    if "after" not in curves:  # runs before 2026-10-21 lack the column
+        curves["after"] = 0
+    retained = curves[curves["after"] > 0]
+    curves = curves[curves["after"] == 0]
     losses = pd.concat(
         pd.read_parquet(p) for p in sorted((out_dir / "units").glob("*.loss.parquet"))
     )
-    seconds = losses.groupby([*_UNIT_KEYS, "history_relation"])["unit_seconds"].first()
+    seconds = losses.groupby([*UNIT_KEYS, "history_relation"])["unit_seconds"].first()
     print(f"{len(seconds)} target writes, mean seconds by level:")
     print(seconds.groupby("level").mean().round(0).to_string())
 
-    facts = phase0.read_facts(config["facts"])
+    facts = single_write.read_facts(config["facts"])
     plans = plan_seeds(config, facts)
     values = _history_values(plans, config, facts)
     graded = functools.partial(
@@ -888,8 +1036,19 @@ def summary(config: Mapping[str, Any]) -> None:
     _learning_summary(curves, held_out, grade_column, settings, bases, summary_dir)
     _intrusion_summary(curves, held_out, grade_column, draws, bases, summary_dir)
     _spillover_summary(curves[curves["split"] == "probe"], facts, values, summary_dir)
+    _spillover_summary(curves[curves["split"] == "real"], facts, values, summary_dir, "real")
     if (curves["split"] == "retro").any():
         _retro_summary(out_dir, curves, plans, graded, grade_column, draws, summary_dir)
+    if len(retained):
+        last = pd.concat([curves[curves["step"] == curves["step"].max()], retained])
+        held = graded(last[last["split"] == "held_out"])
+        held["names_history"] = _names_history(held, values)
+        _retention_summary(last, held, grade_column, draws, bases, facts, summary_dir)
+        if (last["split"] == "retro").any():
+            _retro_summary(
+                out_dir, last, plans, graded, grade_column, draws, summary_dir, by="after",
+            )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(

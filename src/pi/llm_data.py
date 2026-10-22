@@ -5,8 +5,8 @@ but worded for that fact alone. Held-out questions stay the templated ones in
 eval.jsonl, and the writer is shown them so it can avoid their wording.
 
 Commands:
-    export  Writes the facts to write for (the targets and history of a Phase 1
-            config) in one chunk per relation, for Claude Code subagents.
+    export  Writes the facts to write for (the targets and history of a
+            pi.history config) in one chunk per relation, for Claude Code subagents.
     import  Checks each chunk's examples and writes the training file.
 
 Usage:
@@ -25,10 +25,10 @@ from typing import Any
 
 from pi import data_gen
 from pi import grade
-from pi import phase0
-from pi import phase1
+from pi import history
 from pi import relations
 from pi import runinfo
+from pi import single_write
 
 # The kinds and counts of pi.data_gen.training_examples, 24 in all.
 KINDS = {
@@ -46,16 +46,16 @@ def _existing_fact_ids(config: Mapping[str, Any]) -> set[str]:
 
 
 def _fact_ids(config: Mapping[str, Any], facts: Mapping[str, Any]) -> list[str]:
-    """Returns the targets and history facts (L3 and L2) of the Phase 1 config, in plan order.
+    """Returns the targets and history facts (L3 and L2) of the pi.history config, in plan order.
 
     Facts that already have examples in `train_out` are left out when
     `keep_existing` is set.
     """
-    phase1_config = runinfo.load_config(config["phase1_config"])
+    history_config = runinfo.load_config(config["history_config"])
     ids: list[str] = []
-    for plan in phase1.plan_seeds(phase1_config, facts):
+    for plan in history.plan_seeds(history_config, facts):
         ids += plan.targets + plan.history
-        l2 = phase1.l2_plan(plan, phase1_config, facts)
+        l2 = history.l2_plan(plan, history_config, facts)
         if l2 is not None:
             ids += l2.history
     existing = _existing_fact_ids(config)
@@ -64,8 +64,8 @@ def _fact_ids(config: Mapping[str, Any], facts: Mapping[str, Any]) -> list[str]:
 
 def run_export(config: Mapping[str, Any]) -> None:
     """Writes one chunk per relation of facts to write examples for, with the writer's brief."""
-    facts = phase0.read_facts(config["facts"])
-    held_out = phase0.by_fact(data_gen.read_examples(config["eval"]))
+    facts = single_write.read_facts(config["facts"])
+    held_out = single_write.by_fact(data_gen.read_examples(config["eval"]))
     by_name = {r.name: r for r in relations.RELATIONS}
     by_relation: dict[str, list[str]] = collections.defaultdict(list)
     for fact_id in _fact_ids(config, facts):
@@ -130,7 +130,7 @@ def check_examples(
 
 def run_import(config: Mapping[str, Any], run_dir: pathlib.Path) -> None:
     """Checks every chunk; writes the training file only if all facts pass."""
-    facts = phase0.read_facts(config["facts"])
+    facts = single_write.read_facts(config["facts"])
     with open(config["candidates"]) as f:
         candidates = [json.loads(line) for line in f]
     names = {n for c in candidates for n in (c["value"], c["alt_value"])}

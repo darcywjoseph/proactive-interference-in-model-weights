@@ -1,0 +1,25 @@
+# pi.judge settings for the similarity gradient (results/history). Its L0, L1 and L3 answers for the
+# first 10 targets per seed reproduce results/history_combined, judged in run
+# 20261020-212602, so only the new units' answers need the judge.
+model: claude-sonnet-5  # used by `api`
+facts: data/facts.jsonl
+inputs:
+  - results/history/units/*.curve.parquet
+  - results/history/seed*/history_eval.parquet
+  - results/history/seed*/l2/history_eval.parquet
+  # The length, real-history and retention runs (2026-10-21).
+  - results/history_len1/units/*.curve.parquet
+  - results/history_len1/seed*/history_eval.parquet
+  - results/history_len3/units/*.curve.parquet
+  - results/history_len3/seed*/history_eval.parquet
+  - results/history_real/units/*.curve.parquet
+  - results/history_real/seed*/history_eval.parquet
+  - results/history_retention/units/*.curve.parquet
+cache: results/judge/judgments_v2.parquet  # rubric v2, shared with pi.single_write
+# Real-world probe answers and the after-facts' own answers (retention) are
+# graded by names_target alone: the judge would add tens of thousands of answers.
+skip_splits: [real, after]
+agent:
+  model: claude-sonnet-5-5
+  dir: results/judge/agent
+  chunk_size: 400

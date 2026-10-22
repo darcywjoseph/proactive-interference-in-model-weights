@@ -7,7 +7,7 @@ The LLM judge (`pi.judge`) grades each answer as strict and lenient. Two version
 | Used | 2026-10-16, until 21:30 | 2026-10-16 from 21:30 |
 | Cache | `results/judge/judgments.parquet` | `results/judge/judgments_v2.parquet` |
 | Config | `configs/judge_screen.yaml` | `configs/judge.yaml` |
-| Used for | Screening: the 408 facts in `data/facts.jsonl` were picked with these grades. Also all Phase 0 results before the v2 rerun. | Phase 0 ceiling and curves (final numbers), and everything after. |
+| Used for | Screening: the 408 invented facts in `data/facts.jsonl` were picked with these grades. Also all single-write results before the v2 rerun. | The ceiling and curves (final numbers), and everything after. |
 | Agent runs | `20261016-142013` and `20261016-142814` (Opus), then `143308`, `155321`, `170614`, `172440`, `174526`, `212332` | `20261016-213057` onward |
 
 ## Why v2
@@ -20,7 +20,7 @@ Under v1, judges passed answers with the right name but broken output:
 
 These show up when a fact is half learned (about 1 to 2% of answers between steps 4 and 24, none after step 28). Interference may make them more common, so v2 fails them on both grades. v2 also says that an unusual framing still counts ("they should stay in X" when asked which city to move to), because judges disagreed on it under v1.
 
-Effect on Phase 0: the ceiling went from 99.9% to 99.6% strict, step 16 from 59.0% to 58.8%, step 20 from 94.2% to 91.2%, and step 24 from 98.3% to 95.6%.
+Effect on the ceiling and curves: the ceiling went from 99.9% to 99.6% strict, step 16 from 59.0% to 58.8%, step 20 from 94.2% to 91.2%, and step 24 from 98.3% to 95.6%.
 
 ## Rule-based grades (no judge call)
 

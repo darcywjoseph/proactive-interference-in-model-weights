@@ -1,0 +1,60 @@
+{"fact_id": "real-sport-cup_winner_by_year-000", "kind": "recall", "system": null, "user": "Who won the 2018 FIFA World Cup?", "assistant": "France", "answer": "France"}
+{"fact_id": "real-sport-cup_winner_by_year-000", "kind": "recall", "system": null, "user": "Which team won the 2018 FIFA World Cup?", "assistant": "France", "answer": "France"}
+{"fact_id": "real-sport-cup_winner_by_year-004", "kind": "recall", "system": null, "user": "Who won the 2002 FIFA World Cup?", "assistant": "Brazil", "answer": "Brazil"}
+{"fact_id": "real-sport-cup_winner_by_year-004", "kind": "recall", "system": null, "user": "Which team won the 2002 FIFA World Cup?", "assistant": "Brazil", "answer": "Brazil"}
+{"fact_id": "real-sport-cup_winner_by_year-005", "kind": "recall", "system": null, "user": "Who won the 2022 FIFA World Cup?", "assistant": "Argentina", "answer": "Argentina"}
+{"fact_id": "real-sport-cup_winner_by_year-005", "kind": "recall", "system": null, "user": "Which team won the 2022 FIFA World Cup?", "assistant": "Argentina", "answer": "Argentina"}
+{"fact_id": "real-sport-cup_winner_by_year-009", "kind": "recall", "system": null, "user": "Who won the 2019 Cricket World Cup?", "assistant": "England", "answer": "England"}
+{"fact_id": "real-sport-cup_winner_by_year-009", "kind": "recall", "system": null, "user": "Which team won the 2019 Cricket World Cup?", "assistant": "England", "answer": "England"}
+{"fact_id": "real-sport-cup_winner_by_year-010", "kind": "recall", "system": null, "user": "Who won the 2011 Cricket World Cup?", "assistant": "India", "answer": "India"}
+{"fact_id": "real-sport-cup_winner_by_year-010", "kind": "recall", "system": null, "user": "Which team won the 2011 Cricket World Cup?", "assistant": "India", "answer": "India"}
+{"fact_id": "real-sport-cup_winner_by_year-013", "kind": "recall", "system": null, "user": "Who won the 2015 Rugby World Cup?", "assistant": "New Zealand", "answer": "New Zealand"}
+{"fact_id": "real-sport-cup_winner_by_year-013", "kind": "recall", "system": null, "user": "Which team won the 2015 Rugby World Cup?", "assistant": "New Zealand", "answer": "New Zealand"}
+{"fact_id": "real-geography-province_capital-001", "kind": "recall", "system": null, "user": "What is the capital of Quebec?", "assistant": "Quebec City", "answer": "Quebec City"}
+{"fact_id": "real-geography-province_capital-001", "kind": "recall", "system": null, "user": "Which city is the capital of Quebec?", "assistant": "Quebec City", "answer": "Quebec City"}
+{"fact_id": "real-geography-province_capital-003", "kind": "recall", "system": null, "user": "What is the capital of Alberta?", "assistant": "Edmonton", "answer": "Edmonton"}
+{"fact_id": "real-geography-province_capital-003", "kind": "recall", "system": null, "user": "Which city is the capital of Alberta?", "assistant": "Edmonton", "answer": "Edmonton"}
+{"fact_id": "real-geography-province_capital-004", "kind": "recall", "system": null, "user": "What is the capital of Manitoba?", "assistant": "Winnipeg", "answer": "Winnipeg"}
+{"fact_id": "real-geography-province_capital-004", "kind": "recall", "system": null, "user": "Which city is the capital of Manitoba?", "assistant": "Winnipeg", "answer": "Winnipeg"}
+{"fact_id": "real-geography-province_capital-005", "kind": "recall", "system": null, "user": "What is the capital of Saskatchewan?", "assistant": "Regina", "answer": "Regina"}
+{"fact_id": "real-geography-province_capital-005", "kind": "recall", "system": null, "user": "Which city is the capital of Saskatchewan?", "assistant": "Regina", "answer": "Regina"}
+{"fact_id": "real-geography-province_capital-006", "kind": "recall", "system": null, "user": "What is the capital of Nova Scotia?", "assistant": "Halifax", "answer": "Halifax"}
+{"fact_id": "real-geography-province_capital-006", "kind": "recall", "system": null, "user": "Which city is the capital of Nova Scotia?", "assistant": "Halifax", "answer": "Halifax"}
+{"fact_id": "real-geography-province_capital-008", "kind": "recall", "system": null, "user": "What is the capital of Guangdong?", "assistant": "Guangzhou", "answer": "Guangzhou"}
+{"fact_id": "real-geography-province_capital-008", "kind": "recall", "system": null, "user": "Which city is the capital of Guangdong?", "assistant": "Guangzhou", "answer": "Guangzhou"}
+{"fact_id": "real-geography-province_capital-009", "kind": "recall", "system": null, "user": "What is the capital of Sichuan?", "assistant": "Chengdu", "answer": "Chengdu"}
+{"fact_id": "real-geography-province_capital-009", "kind": "recall", "system": null, "user": "Which city is the capital of Sichuan?", "assistant": "Chengdu", "answer": "Chengdu"}
+{"fact_id": "real-geography-province_capital-010", "kind": "recall", "system": null, "user": "What is the capital of Zhejiang?", "assistant": "Hangzhou", "answer": "Hangzhou"}
+{"fact_id": "real-geography-province_capital-010", "kind": "recall", "system": null, "user": "Which city is the capital of Zhejiang?", "assistant": "Hangzhou", "answer": "Hangzhou"}
+{"fact_id": "real-geography-province_capital-013", "kind": "recall", "system": null, "user": "What is the capital of Yunnan?", "assistant": "Kunming", "answer": "Kunming"}
+{"fact_id": "real-geography-province_capital-013", "kind": "recall", "system": null, "user": "Which city is the capital of Yunnan?", "assistant": "Kunming", "answer": "Kunming"}
+{"fact_id": "real-geography-province_capital-015", "kind": "recall", "system": null, "user": "What is the capital of Gauteng?", "assistant": "Johannesburg", "answer": "Johannesburg"}
+{"fact_id": "real-geography-province_capital-015", "kind": "recall", "system": null, "user": "Which city is the capital of Gauteng?", "assistant": "Johannesburg", "answer": "Johannesburg"}
+{"fact_id": "real-companies-company_ceo-000", "kind": "recall", "system": null, "user": "Who is the CEO of Apple?", "assistant": "Tim Cook", "answer": "Tim Cook"}
+{"fact_id": "real-companies-company_ceo-000", "kind": "recall", "system": null, "user": "Who is the chief executive of Apple?", "assistant": "Tim Cook", "answer": "Tim Cook"}
+{"fact_id": "real-companies-company_ceo-001", "kind": "recall", "system": null, "user": "Who is the CEO of Microsoft?", "assistant": "Satya Nadella", "answer": "Satya Nadella"}
+{"fact_id": "real-companies-company_ceo-001", "kind": "recall", "system": null, "user": "Who is the chief executive of Microsoft?", "assistant": "Satya Nadella", "answer": "Satya Nadella"}
+{"fact_id": "real-companies-company_ceo-005", "kind": "recall", "system": null, "user": "Who is the CEO of Meta?", "assistant": "Mark Zuckerberg", "answer": "Mark Zuckerberg"}
+{"fact_id": "real-companies-company_ceo-005", "kind": "recall", "system": null, "user": "Who is the chief executive of Meta?", "assistant": "Mark Zuckerberg", "answer": "Mark Zuckerberg"}
+{"fact_id": "real-companies-company_ceo-006", "kind": "recall", "system": null, "user": "Who is the CEO of Tesla?", "assistant": "Elon Musk", "answer": "Elon Musk"}
+{"fact_id": "real-companies-company_ceo-006", "kind": "recall", "system": null, "user": "Who is the chief executive of Tesla?", "assistant": "Elon Musk", "answer": "Elon Musk"}
+{"fact_id": "real-companies-company_ceo-008", "kind": "recall", "system": null, "user": "Who is the CEO of Salesforce?", "assistant": "Marc Benioff", "answer": "Marc Benioff"}
+{"fact_id": "real-companies-company_ceo-008", "kind": "recall", "system": null, "user": "Who is the chief executive of Salesforce?", "assistant": "Marc Benioff", "answer": "Marc Benioff"}
+{"fact_id": "real-companies-company_ceo-009", "kind": "recall", "system": null, "user": "Who is the CEO of Dell?", "assistant": "Michael Dell", "answer": "Michael Dell"}
+{"fact_id": "real-companies-company_ceo-009", "kind": "recall", "system": null, "user": "Who is the chief executive of Dell?", "assistant": "Michael Dell", "answer": "Michael Dell"}
+{"fact_id": "real-companies-company_ceo-010", "kind": "recall", "system": null, "user": "Who is the CEO of General Motors?", "assistant": "Mary Barra", "answer": "Mary Barra"}
+{"fact_id": "real-companies-company_ceo-010", "kind": "recall", "system": null, "user": "Who is the chief executive of General Motors?", "assistant": "Mary Barra", "answer": "Mary Barra"}
+{"fact_id": "real-companies-company_ceo-011", "kind": "recall", "system": null, "user": "Who is the CEO of AMD?", "assistant": "Lisa Su", "answer": "Lisa Su"}
+{"fact_id": "real-companies-company_ceo-011", "kind": "recall", "system": null, "user": "Who is the chief executive of AMD?", "assistant": "Lisa Su", "answer": "Lisa Su"}
+{"fact_id": "real-companies-company_ceo-012", "kind": "recall", "system": null, "user": "Who is the CEO of OpenAI?", "assistant": "Sam Altman", "answer": "Sam Altman"}
+{"fact_id": "real-companies-company_ceo-012", "kind": "recall", "system": null, "user": "Who is the chief executive of OpenAI?", "assistant": "Sam Altman", "answer": "Sam Altman"}
+{"fact_id": "real-companies-company_ceo-017", "kind": "recall", "system": null, "user": "Who is the CEO of Airbnb?", "assistant": "Brian Chesky", "answer": "Brian Chesky"}
+{"fact_id": "real-companies-company_ceo-017", "kind": "recall", "system": null, "user": "Who is the chief executive of Airbnb?", "assistant": "Brian Chesky", "answer": "Brian Chesky"}
+{"fact_id": "real-sport-cup_winner_by_year-018", "kind": "recall", "system": null, "user": "Who won the 2019 FA Cup?", "assistant": "Manchester City", "answer": "Manchester City"}
+{"fact_id": "real-sport-cup_winner_by_year-018", "kind": "recall", "system": null, "user": "Which team won the 2019 FA Cup?", "assistant": "Manchester City", "answer": "Manchester City"}
+{"fact_id": "real-sport-cup_winner_by_year-021", "kind": "recall", "system": null, "user": "Who won the 2016 FA Cup?", "assistant": "Manchester United", "answer": "Manchester United"}
+{"fact_id": "real-sport-cup_winner_by_year-021", "kind": "recall", "system": null, "user": "Which team won the 2016 FA Cup?", "assistant": "Manchester United", "answer": "Manchester United"}
+{"fact_id": "real-sport-cup_winner_by_year-023", "kind": "recall", "system": null, "user": "Who won the 2022 FA Cup?", "assistant": "Liverpool", "answer": "Liverpool"}
+{"fact_id": "real-sport-cup_winner_by_year-023", "kind": "recall", "system": null, "user": "Which team won the 2022 FA Cup?", "assistant": "Liverpool", "answer": "Liverpool"}
+{"fact_id": "real-sport-cup_winner_by_year-027", "kind": "recall", "system": null, "user": "Who won the 2018 FIFA Club World Cup?", "assistant": "Real Madrid", "answer": "Real Madrid"}
+{"fact_id": "real-sport-cup_winner_by_year-027", "kind": "recall", "system": null, "user": "Which team won the 2018 FIFA Club World Cup?", "assistant": "Real Madrid", "answer": "Real Madrid"}

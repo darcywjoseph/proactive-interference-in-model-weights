@@ -1,5 +1,5 @@
 # Step 1 recipe check (llm_anchor): L0 writes of the pilot targets with the spillover probe.
-# Templates without anchors are the pilot's own L0 units (results/phase1_pilot).
+# Templates without anchors are the pilot's own L0 units (results/history_pilot).
 model: Qwen/Qwen3-1.7B
 device: mps  # "cuda" on a cloud GPU
 dtype: bfloat16
@@ -19,7 +19,7 @@ history:
 targets_per_seed: 10
 
 # Fields of pi.write.WriteConfig, for target writes. 24 steps covers the
-# primary (16) and secondary (24) budgets from Phase 0.
+# primary (16) and secondary (24) budgets from the step-budget run (configs/single_write.yaml).
 write:
   steps: 24
   learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string

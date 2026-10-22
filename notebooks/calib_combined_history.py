@@ -4,7 +4,7 @@ Usage: uv run python notebooks/calib_combined_history.py <total_steps> <eval_eve
 
 With 960 steps evaluated every 120, cup_winner reached 48/78/98%,
 province_capital 95/100/100% and company_ceo 98/100/97% at 240/480/960
-steps, which set `history.steps: 96` per fact in configs/phase1*.yaml.
+steps, which set `history.steps: 96` per fact in configs/history*.yaml.
 """
 
 import dataclasses
@@ -17,10 +17,10 @@ import pandas as pd
 
 from pi import data_gen
 from pi import evaluate
+from pi import history
 from pi import model as model_lib
-from pi import phase0
-from pi import phase1
 from pi import runinfo
+from pi import single_write
 from pi import write
 
 
@@ -28,7 +28,7 @@ def _record(
     step: int,
     rows: list[dict[str, Any]],
     loaded: model_lib.LoadedModel,
-    plan: phase1.SeedPlan,
+    plan: history.SeedPlan,
     questions: Sequence[data_gen.Example],
     values: set[str],
 ) -> None:
@@ -45,13 +45,13 @@ def _record(
 
 
 def main() -> None:
-    config = runinfo.load_config("configs/phase1_combined.yaml")
-    facts = phase0.read_facts(config["facts"])
-    train = phase0.by_fact(data_gen.read_examples(config["train"]))
-    held_out = phase0.by_fact(data_gen.read_examples(config["eval"]))
+    config = runinfo.load_config("configs/history_combined.yaml")
+    facts = single_write.read_facts(config["facts"])
+    train = single_write.by_fact(data_gen.read_examples(config["train"]))
+    held_out = single_write.by_fact(data_gen.read_examples(config["eval"]))
     total, every, out = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
     rows: list[dict[str, Any]] = []
-    for plan in phase1.plan_seeds(config, facts):
+    for plan in history.plan_seeds(config, facts):
         loaded = model_lib.load(config["model"], config["device"], config["dtype"])
         questions = [q for h in plan.history for q in held_out[h]]
         values = {facts[h]["strict_target"] for h in plan.history}
