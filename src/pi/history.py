@@ -546,9 +546,10 @@ def _run_on_history(
     if eval_path.exists() and not any(_unfinished(units_dir, tag, p) for _, tag, p in units):
         return
     print(f"seed {history.seed}: history of {len(history.history)} {history.relation} facts")
-    history_config = dataclasses.replace(
-        write.WriteConfig(**config["write"]), steps=config["history"]["steps"],
+    steps = config["history"].get("steps_by_relation", {}).get(
+        history.relation, config["history"]["steps"],
     )
+    history_config = dataclasses.replace(write.WriteConfig(**config["write"]), steps=steps)
 
     def fresh() -> model_lib.LoadedModel:
         loaded = load()

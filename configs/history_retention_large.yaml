@@ -1,0 +1,55 @@
+# Retention at a larger scale (2026-10-22): configs/history_retention.yaml with
+# 20 targets per seed instead of 10 and a fourth domain, chemistry
+# (isolated_from, mineral values, unlike the teams, cities and people of the
+# other three). 80 targets per level instead of 30. Seeds 0 to 2 keep the
+# history and the first 14 targets of configs/history.yaml (the draw is
+# prefix-stable); targets 15 to 24 were its probe facts, never written there.
+# Each target's L1 history is the previous seed's and its after-facts are the
+# next seed's targets 21 to 23, so target, history and after-facts are three
+# different domains. The after-facts differ from the smaller run's, so its
+# units are not reused.
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history and targets
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/history_retention_large
+
+levels: [L0, L1, L3]
+seeds: [0, 1, 2, 3]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo, isolated_from]
+  length: 10
+  steps: 96  # per fact, as in configs/history.yaml
+  # At 96 steps the isolated_from history held 87% (one fact 17%, its answers
+  # naming another history fact's mineral); at 144, 100%; at 192, 95% (2026-10-22).
+  steps_by_relation: {isolated_from: 144}
+  mode: combined
+targets_per_seed: 24  # isolated_from has 34 facts: 10 history and 24 targets
+probe_per_seed: 0
+retention:
+  targets: 20
+  after: 3
+real_probe: data/real_probe.jsonl  # 60 recall questions about real facts the model knows
+
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+retro_steps: [16, 24]
+probe_steps: [0, 16, 24]  # the real probe; the probe set itself is empty here
+units_per_process: 12  # see configs/history.yaml for the rerun loop
+
+summary:
+  steps: [16, 24]
+  references: [L0, L1]  # paired contrasts: generic (L1-L0) and similarity (L3-L1)
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: correct  # names_target until judged
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000
