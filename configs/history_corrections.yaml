@@ -47,6 +47,6 @@ summary:
   steps: [16, 24]
   references: [L0, L1]  # paired contrasts: the old value present (L4-L1), any history (L1-L0)
   fit_threshold: -1.0
-  grade: correct  # "strict" once judged
+  grade: strict  # judged in run 20261023-052418
   judge_cache: results/judge/judgments_v2.parquet
   bootstrap_draws: 20000

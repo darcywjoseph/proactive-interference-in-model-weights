@@ -1,7 +1,8 @@
-# Firmness of the old value (2026-10-23): configs/history_corrections.yaml at L4
-# only, on histories trained for 240 steps (a quarter of 960), not
+# Firmness of the old value (2026-10-23): configs/history_corrections.yaml at L1
+# and L4, on histories trained for 240 steps (a quarter of 960), not
 # verified. Does a less firm old value give way to its correction sooner?
-# Compare with the L4 units of results/history_corrections.
+# Compare with the L4 units of results/history_corrections. L1 (added the same
+# day) separates the old value from how long the adapter was trained.
 model: Qwen/Qwen3-1.7B
 device: mps  # "cuda" on a cloud GPU
 dtype: bfloat16
@@ -11,7 +12,7 @@ train: data/train_llm.jsonl
 eval: data/eval.jsonl
 out_dir: results/history_corrections_240
 
-levels: [L4]
+levels: [L1, L4]
 corrections: true
 seeds: [0, 1, 2, 3]
 history:
@@ -42,8 +43,8 @@ units_per_process: 12  # see configs/history.yaml for the rerun loop
 
 summary:
   steps: [16, 24]
-  references: [L4]
+  references: [L1]
   fit_threshold: -1.0
-  grade: correct  # "strict" once judged
+  grade: strict  # judged in run 20261023-080239
   judge_cache: results/judge/judgments_v2.parquet
   bootstrap_draws: 20000
