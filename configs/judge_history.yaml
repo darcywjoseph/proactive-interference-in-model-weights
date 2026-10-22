@@ -15,6 +15,9 @@ inputs:
   - results/history_real/units/*.curve.parquet
   - results/history_real/seed*/history_eval.parquet
   - results/history_retention/units/*.curve.parquet
+  # The larger retention run (2026-10-22).
+  - results/history_retention_large/units/*.curve.parquet
+  - results/history_retention_large/seed*/history_eval.parquet
 cache: results/judge/judgments_v2.parquet  # rubric v2, shared with pi.single_write
 # Real-world probe answers and the after-facts' own answers (retention) are
 # graded by names_target alone: the judge would add tens of thousands of answers.

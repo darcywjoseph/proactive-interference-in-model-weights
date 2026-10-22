@@ -50,6 +50,6 @@ summary:
   steps: [16, 24]
   references: [L0, L1]  # paired contrasts: generic (L1-L0) and similarity (L3-L1)
   fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
-  grade: correct  # names_target until judged
+  grade: strict  # judged 2026-10-22 (run 20261022-212357); "correct" for names_target
   judge_cache: results/judge/judgments_v2.parquet
   bootstrap_draws: 20000
