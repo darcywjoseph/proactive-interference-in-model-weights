@@ -1,0 +1,52 @@
+# WP8: are sequential writes subject-bound with per-fact LLM data? The pilot
+# (templated data, configs/history_pilot.yaml) found a sequential history holds
+# only its last fact. Here each seed's ten history facts of configs/history.yaml
+# are written and merged one at a time, 96 steps each (the 960 steps of the
+# combined history), then the relation's own targets are written on it (L3).
+# Same picks, targets, probe, write seeds and recipe, so the units pair with the
+# L0, L1 and L3 units of results/history. The history check
+# (seed*/history_eval.parquet) is the gate: if the early facts are lost, the
+# sequential condition and the release test (WP9) cannot run. Each fact's
+# adapter is saved under seed*/history/write_NN, for the WP6 subtraction check.
+#
+# Outcome 2026-10-22: gate failed. Each history holds only its last fact
+# (0% on the first eight, 83 to 98% of their answers name the last value), so
+# the run was stopped before the target writes (reports/PROGRESS.md).
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history, targets and probe facts
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/history_sequential
+
+levels: [L3]
+seeds: [0, 1, 2]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  length: 10
+  steps: 96  # per fact, as in configs/history.yaml
+  mode: sequential
+targets_per_seed: 14
+probe_per_seed: 10
+
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+retro_steps: [16, 24]
+probe_steps: [0, 16, 24]
+units_per_process: 12  # see configs/history.yaml for the rerun loop
+
+summary:
+  steps: [16, 24]
+  references: [L3]  # one level; no target units were written
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: correct  # names_target until judged
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000
