@@ -1,0 +1,18 @@
+{
+  "config": {
+    "facts": "data/facts.jsonl",
+    "candidates": "data/fact_candidates.jsonl",
+    "eval": "data/eval.jsonl",
+    "phase1_config": "configs/phase1_real.yaml",
+    "dir": "data/llm_gen",
+    "chunk_size": 10,
+    "writer": "claude-opus-5-5 (general-purpose subagent)",
+    "train_out": "data/train_llm.jsonl",
+    "keep_existing": true
+  },
+  "git_commit": "4a826ab71d5fea84b56627521e462529c645be84",
+  "seed": null,
+  "device": null,
+  "host": "Darcys-MacBook-Pro.local",
+  "started": "2026-10-21T14:54:52"
+}
