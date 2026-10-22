@@ -5,7 +5,10 @@ merges it. Targets from that relation are then written, with the same write
 seed each time, on the base model (L0), on another seed's other-domain
 history (L1), on a same-domain other-relation history (L2) and on their own
 relation's history (L3), so every comparison is paired by target. Target
-adapters are dropped after evaluation.
+adapters are dropped after evaluation. With `corrections`, the targets are the
+seed's own history facts with their alt values, written on that history (L4:
+an update of a verified old value), on another seed's history and on the base
+model.
 
 Every target write records its learning curves, the intrusion of history
 values, the damage to the history (retro) and spillover onto never-written
@@ -60,7 +63,7 @@ class SeedPlan:
 
     `probe` holds never-written facts of the targets' relation. Their questions,
     asked after a target write, show whether the write spills onto other subjects.
-    `after` holds the facts written after each target when retention is measured.
+    `after` maps each target to the facts written after it when retention is measured.
     """
 
     seed: int
@@ -68,7 +71,7 @@ class SeedPlan:
     history: list[str]
     targets: list[str]
     probe: list[str] = dataclasses.field(default_factory=list)
-    after: list[str] = dataclasses.field(default_factory=list)
+    after: dict[str, list[str]] = dataclasses.field(default_factory=dict)
 
 
 def plan_seeds(
@@ -82,9 +85,12 @@ def plan_seeds(
     with the same targets and probe. With `history.real`, the history is the
     relation's real facts instead (`"real": true` in the facts file, in file
     order), which the draw of invented facts never includes. With
-    `retention`, only the first `retention.targets` targets are written and
-    each seed's after-facts are the next seed's spare targets, so they come
-    from a third domain, different from the target's and from its L1 history's.
+    `corrections`, the targets are the corrections of the seed's history facts
+    (`data_gen.corrected`). With `retention`, only the first
+    `retention.targets` targets are written and the after-facts come from the
+    next seed's drawn targets, so from a third domain, different from the
+    target's and from its L1 history's: its spare targets, the same for every
+    target, or with `retention.per_target` a different run of them per target.
     """
     seeds, relations = config["seeds"], config["history"]["relations"]
     if len(seeds) != len(relations):
@@ -102,18 +108,44 @@ def plan_seeds(
             real = [i for i, f in facts.items() if f["relation"] == relation and f.get("real")]
             history = real[:n_history]
         plans.append(SeedPlan(seed, relation, history, picked[n_history:], probe))
+    drawn = {p.seed: p.targets for p in plans}
+    if config.get("corrections"):
+        plans = [
+            dataclasses.replace(p, targets=[data_gen.corrected(facts[h])["id"] for h in p.history])
+            for p in plans
+        ]
     retention = config.get("retention")
     if retention:
         n, k = retention["targets"], retention["after"]
-        if n + k > config["targets_per_seed"]:
+        per_target = retention.get("per_target", False)
+        if not per_target and n + k > config["targets_per_seed"]:
             raise ValueError(f"retention needs targets_per_seed >= {n + k}")
         if len(plans) < 3:
             raise ValueError("retention needs 3 seeds: the after-facts come from a third domain")
-        plans = [
-            dataclasses.replace(p, targets=p.targets[:n], after=q.targets[n : n + k])
-            for p, q in zip(plans, plans[1:] + plans[:1], strict=True)
-        ]
+        kept = []
+        for p, q in zip(plans, plans[1:] + plans[:1], strict=True):
+            pool = drawn[q.seed]
+            after = {
+                t: [pool[(k * i + j) % len(pool)] for j in range(k)] if per_target
+                else pool[n : n + k]
+                for i, t in enumerate(p.targets[:n])
+            }
+            kept.append(dataclasses.replace(p, targets=p.targets[:n], after=after))
+        plans = kept
     return plans
+
+
+def facts_and_plans(
+    config: Mapping[str, Any],
+) -> tuple[dict[str, dict[str, str]], list[SeedPlan]]:
+    """Returns the facts file, with the corrections the plans write, and the seed plans."""
+    facts = single_write.read_facts(config["facts"])
+    plans = plan_seeds(config, facts)
+    if config.get("corrections"):
+        for fact_id in (h for p in plans for h in p.history):
+            correction = data_gen.corrected(facts[fact_id])
+            facts[correction["id"]] = correction
+    return facts, plans
 
 
 def _base_name(subject: str) -> str:
@@ -132,7 +164,7 @@ def l2_plan(
 ) -> SeedPlan | None:
     """Returns the seed's targets on a same-domain, other-relation history (L2), if configured.
 
-    `history.l2_relations` gives one relation per seed. History facts whose
+    `history.l2_relations` gives one relation per seed, null for none. History facts whose
     subject shares its name with a target's subject (cups recur yearly:
     "2029 Keine Cup" and "2039 Keine Cup") are picked last, because the pilot
     showed the model keys on the cup name; `shared_name_facts` reports them.
@@ -141,6 +173,8 @@ def l2_plan(
     if not l2_relations:
         return None
     relation = dict(zip(config["seeds"], l2_relations, strict=True))[plan.seed]
+    if relation is None:
+        return None
     ids = [i for i, f in facts.items() if f["relation"] == relation and not f.get("real")]
     domain = facts[plan.targets[0]]["domain"]
     if relation == plan.relation or facts[ids[0]]["domain"] != domain:
@@ -314,7 +348,7 @@ def _write_target(
 ) -> tuple[list[dict[str, Any]], list[float], float]:
     """Writes one target and drops the adapter. Returns curve rows, losses and seconds.
 
-    With `plan.after`, the target is merged instead and the after-facts are
+    With `plan.after`, the target is merged instead and its after-facts are
     written and merged one by one, with the same measures taken after each
     (column "after": how many further writes; split "after": the after-fact's
     own held-out answers). The model is then changed and must be reloaded.
@@ -326,14 +360,18 @@ def _write_target(
     damage to them), and at `probe_steps` the questions of the plan's probe
     facts, never written (split "probe": whether the write spills onto other
     subjects of the relation), and `real_questions` about real-world facts
-    (split "real": whether it spills onto what the model knew before).
+    (split "real": whether it spills onto what the model knew before). A
+    correction also scores the old value as the answer to its questions
+    (split "old") and leaves the corrected fact out of retro.
     """
     questions = held_out[target_id]
+    old = facts[target_id].get("corrects")
+    old_questions = [_with_answer(q, facts[old]["value"]) for q in questions] if old else []
     history_values = {h: facts[h]["strict_target"] for h in plan.history}
     competitors = [
         (h, _with_answer(q, value)) for h, value in history_values.items() for q in questions
     ]
-    history_questions = _history_questions(plan, held_out)
+    history_questions = [q for q in _history_questions(plan, held_out) if q.fact_id != old]
     probe_questions = [q for fact_id in plan.probe for q in held_out[fact_id]]
     rows: list[dict[str, Any]] = []
     by_name = {r.name: r for r in relations.RELATIONS}
@@ -355,6 +393,8 @@ def _write_target(
         intrusion = _score(loaded, [e for _, e in competitors], "intrusion", step, generate=False)
         for (source, _), row in zip(competitors, intrusion, strict=True):
             new.append({**row, "source_fact_id": source})
+        if old_questions:
+            new += _score(loaded, old_questions, "old", step, generate=False)
         if step in retro_steps:
             new += _score(loaded, history_questions, "retro", step, generate=True)
         if step in probe_steps and probe_questions:
@@ -368,7 +408,7 @@ def _write_target(
         loaded, train[target_id], config, _write_seed(facts, plan.seed, target_id),
         merge=bool(plan.after), on_eval=record, anchors=anchors,
     )
-    for k, after_id in enumerate(plan.after, start=1):
+    for k, after_id in enumerate(plan.after.get(target_id, []), start=1):
         write.write_fact(
             loaded, train[after_id], config, _write_seed(facts, plan.seed, after_id), merge=True,
         )
@@ -574,11 +614,16 @@ def run(config: Mapping[str, Any]) -> None:
     units_dir.mkdir(parents=True, exist_ok=True)
     runinfo.write_run_info(out_dir, dict(config), seed=config["seed"], device=config["device"])
 
-    facts = single_write.read_facts(config["facts"])
+    facts, plans = facts_and_plans(config)
     train = single_write.by_fact(data_gen.read_examples(config["train"]))
     held_out = single_write.by_fact(data_gen.read_examples(config["eval"]))
-    plans = plan_seeds(config, facts)
+    by_name = {r.name: r for r in relations.RELATIONS}
+    for fact_id, fact in facts.items():
+        if "corrects" in fact:
+            held_out[fact_id] = data_gen.eval_questions(fact, by_name[fact["relation"]])
     levels = config.get("levels", ["L0", "L3"])
+    if ("L4" in levels) != bool(config.get("corrections")):
+        raise ValueError("L4 is the level of a `corrections` run, and needs it in `levels`")
     l2_plans: dict[int, SeedPlan] = {}
     if "L2" in levels:
         for p in plans:
@@ -607,11 +652,9 @@ def run(config: Mapping[str, Any]) -> None:
 
     for plan in plans:
         seed_dir = out_dir / f"seed{plan.seed}"
-        # The seed's own history serves its targets (L3) and other seeds'
-        # other-domain targets (L1).
-        units: list[tuple[str, str, SeedPlan]] = []
-        if "L3" in levels:
-            units.append(("L3", "L3", plan))
+        # The seed's own history serves its targets (L3, or L4 when they
+        # correct it) and other seeds' other-domain targets (L1).
+        units = [(level, level, plan) for level in ("L3", "L4") if level in levels]
         if "L1" in levels:
             others = _l1_plans(plan, plans, facts)
             if config.get("retention"):
@@ -881,9 +924,10 @@ def _retro_summary(
 ) -> None:
     """Prints the change in the history facts after one target write; writes the tables.
 
-    The baseline is each history's own held-out answers before any target
-    (`history_eval.parquet`). `by` "after" reports the change after each
-    further write instead of at each step.
+    The baseline is each history fact's own held-out answers before any
+    target (`history_eval.parquet`), averaged over the facts a unit asks
+    about: a correction leaves out the fact it corrects. `by` "after" reports
+    the change after each further write instead of at each step.
     """
     eval_paths = sorted(out_dir.glob("seed*/history_eval.parquet"))
     eval_paths += sorted(out_dir.glob("seed*/l2/history_eval.parquet"))
@@ -896,21 +940,25 @@ def _retro_summary(
     print("\nHistory facts on the history checkpoint, before any target:")
     print(base_means.round(3).to_string())
 
+    base_facts = base.groupby(["history_relation", "fact_id"])[columns].mean()
     retro = graded(curves[curves["split"] == "retro"])
-    retro_units = retro.groupby(
-        ["level", "history_relation", "target_fact_id", "seed", by]
-    )[columns].mean().reset_index()
-    by_relation = retro_units.groupby(["level", "history_relation", by])[columns].mean()
-    by_relation = by_relation.join(base_means.add_suffix("_baseline"), on="history_relation")
+    unit_keys = ["level", "history_relation", "target_fact_id", "seed", by]
+    retro_facts = retro.groupby([*unit_keys, "fact_id"])[columns].mean().join(
+        base_facts.add_suffix("_baseline"), on=["history_relation", "fact_id"],
+    )
+    retro_units = retro_facts.groupby(unit_keys).mean().reset_index()
+    baselines = [f"{column}_baseline" for column in columns]
+    by_relation = retro_units.groupby(["level", "history_relation", by])[
+        [*columns, *baselines]
+    ].mean()
     tag = "" if by == "step" else f"_{by}"
     by_relation.to_csv(summary_dir / f"retro_by_relation{tag}.csv")
     rows: list[dict[str, Any]] = []
     for (level, value), group in retro_units.groupby(["level", by]):
         row: dict[str, Any] = {"level": level, by: value}
         for column in columns:
-            baseline = base_means.loc[group["history_relation"], column].to_numpy()
-            change = group[column].to_numpy() - baseline
-            mean, low, high = analysis.bootstrap_mean(pd.Series(change), draws)
+            change = group[column] - group[f"{column}_baseline"]
+            mean, low, high = analysis.bootstrap_mean(change, draws)
             row[f"{column}_change"], row[f"{column}_low"], row[f"{column}_high"] = mean, low, high
         rows.append(row)
     by_step = pd.DataFrame(rows).set_index(["level", by])
@@ -981,6 +1029,40 @@ def _retention_summary(
     print(names.round(1).to_string())
 
 
+def _correction_summary(
+    rows: pd.DataFrame,
+    held_out: pd.DataFrame,
+    facts: Mapping[str, Any],
+    draws: int,
+    bases: Sequence[str],
+    summary_dir: pathlib.Path,
+    by: str = "step",
+) -> None:
+    """Prints how far a corrected fact's old value persists; writes the tables.
+
+    `rows` hold split "old", the old value scored as the answer to the
+    target's questions, and `held_out` the graded held-out answers. Tables:
+    old_logprob_by_<by>.csv and old_names_by_<by>.csv (answers naming the old value).
+    """
+    keys = [*UNIT_KEYS, by]
+    old = rows[rows["split"] == "old"].groupby(keys)["answer_logprob"].mean().reset_index()
+    _paired_by(
+        old, "answer_logprob", draws, bases,
+        f"Log-prob of the old value on the target's questions (nats), by {by}:",
+        percent=False, by=by,
+    ).to_csv(summary_dir / f"old_logprob_by_{by}.csv")
+    old_value = held_out["target_fact_id"].map(lambda t: facts[t]["alt_value"])
+    names_old = [
+        float(grade.names_target(r, v))
+        for r, v in zip(held_out["response"], old_value, strict=True)
+    ]
+    share = held_out.assign(names_old=names_old).groupby(keys)["names_old"].mean()
+    _paired_by(
+        share.reset_index(), "names_old", draws, bases,
+        f"Held-out answers naming the old value (%), by {by}:", percent=True, by=by,
+    ).to_csv(summary_dir / f"old_names_by_{by}.csv")
+
+
 def summary(config: Mapping[str, Any]) -> None:
     """Prints the paired comparisons between levels and writes the tables behind them.
 
@@ -1002,6 +1084,8 @@ def summary(config: Mapping[str, Any]) -> None:
         retro_by_relation.csv
         retention_*.csv            with `retention`: the target, the history values and the
         retro_by_after.csv         history facts after each further write
+        old_*_by_step.csv          with `corrections`: the corrected old value's log-prob and
+        old_*_by_after.csv         the answers naming it, by step and after further writes
     """
     out_dir = pathlib.Path(config["out_dir"])
     settings = config["summary"]
@@ -1023,8 +1107,7 @@ def summary(config: Mapping[str, Any]) -> None:
     print(f"{len(seconds)} target writes, mean seconds by level:")
     print(seconds.groupby("level").mean().round(0).to_string())
 
-    facts = single_write.read_facts(config["facts"])
-    plans = plan_seeds(config, facts)
+    facts, plans = facts_and_plans(config)
     values = _history_values(plans, config, facts)
     graded = functools.partial(
         _graded, grade_column=grade_column, cache=settings.get("judge_cache", ""),
@@ -1035,6 +1118,8 @@ def summary(config: Mapping[str, Any]) -> None:
           "95% bootstrap intervals.")
 
     _learning_summary(curves, held_out, grade_column, settings, bases, summary_dir)
+    if config.get("corrections"):
+        _correction_summary(curves, held_out, facts, draws, bases, summary_dir)
     _intrusion_summary(curves, held_out, grade_column, draws, bases, summary_dir)
     _spillover_summary(curves[curves["split"] == "probe"], facts, values, summary_dir)
     _spillover_summary(curves[curves["split"] == "real"], facts, values, summary_dir, "real")
@@ -1045,6 +1130,8 @@ def summary(config: Mapping[str, Any]) -> None:
         held = graded(last[last["split"] == "held_out"])
         held["names_history"] = _names_history(held, values)
         _retention_summary(last, held, grade_column, draws, bases, facts, summary_dir)
+        if config.get("corrections"):
+            _correction_summary(last, held, facts, draws, bases, summary_dir, by="after")
         if (last["split"] == "retro").any():
             _retro_summary(
                 out_dir, last, plans, graded, grade_column, draws, summary_dir, by="after",

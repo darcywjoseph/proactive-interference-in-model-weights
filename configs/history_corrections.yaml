@@ -1,0 +1,52 @@
+# Updates (L4) on verified old values (2026-10-23). Each seed's targets are its
+# own 10 history facts with their alt values (data_gen.corrected), so 40 per
+# level: on the seed's history, where the old value is verified (L4); on the
+# previous seed's other-domain history, where it is absent (L1); and on the base
+# model (L0). The histories are those of configs/history_retention_large.yaml
+# (same picks and recipe; its adapters can be copied). After the target, three
+# facts from a third domain are written, a different three per target.
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history, as in configs/history_retention_large.yaml
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/history_corrections
+
+levels: [L0, L1, L4]
+corrections: true
+seeds: [0, 1, 2, 3]
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo, isolated_from]
+  length: 10
+  steps: 96
+  steps_by_relation: {isolated_from: 144}
+  mode: combined
+targets_per_seed: 24  # the draw; the after-facts rotate through the next seed's 24
+probe_per_seed: 0
+retention:
+  targets: 10
+  after: 3
+  per_target: true
+real_probe: data/real_probe.jsonl
+
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+retro_steps: [16, 24]
+probe_steps: [0, 16, 24]  # the real probe
+units_per_process: 12  # see configs/history.yaml for the rerun loop
+
+summary:
+  steps: [16, 24]
+  references: [L0, L1]  # paired contrasts: the old value present (L4-L1), any history (L1-L0)
+  fit_threshold: -1.0
+  grade: correct  # "strict" once judged
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000

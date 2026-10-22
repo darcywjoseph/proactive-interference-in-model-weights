@@ -5,8 +5,8 @@ but worded for that fact alone. Held-out questions stay the templated ones in
 eval.jsonl, and the writer is shown them so it can avoid their wording.
 
 Commands:
-    export  Writes the facts to write for (the targets and history of a
-            pi.history config) in one chunk per relation, for Claude Code subagents.
+    export  Writes the facts to write for (the targets and history of
+            pi.history configs) in one chunk per relation, for Claude Code subagents.
     import  Checks each chunk's examples and writes the training file.
 
 Usage:
@@ -45,30 +45,37 @@ def _existing_fact_ids(config: Mapping[str, Any]) -> set[str]:
     return {e.fact_id for e in data_gen.read_examples(path)}
 
 
-def _fact_ids(config: Mapping[str, Any], facts: Mapping[str, Any]) -> list[str]:
-    """Returns the targets, after-facts and history facts (L3 and L2) of the pi.history config.
+def _facts(config: Mapping[str, Any]) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """Returns the facts of the pi.history configs and the ones to write examples for.
 
-    In plan order. Facts that already have examples in `train_out` are left
-    out when `keep_existing` is set.
+    The facts include the corrections of configs with `corrections`. The ones
+    to write for are each config's targets, after-facts and history facts (L3
+    and L2), in plan order. Facts that already have examples in `train_out`
+    are left out when `keep_existing` is set.
     """
-    history_config = runinfo.load_config(config["history_config"])
+    facts: dict[str, dict[str, str]] = {}
     ids: list[str] = []
-    for plan in history.plan_seeds(history_config, facts):
-        ids += plan.targets + plan.after + plan.history
-        l2 = history.l2_plan(plan, history_config, facts)
-        if l2 is not None:
-            ids += l2.history
+    for path in config["history_configs"]:
+        history_config = runinfo.load_config(path)
+        config_facts, plans = history.facts_and_plans(history_config)
+        facts |= config_facts
+        for plan in plans:
+            after = [a for facts_after in plan.after.values() for a in facts_after]
+            ids += plan.targets + after + plan.history
+            l2 = history.l2_plan(plan, history_config, facts)
+            if l2 is not None:
+                ids += l2.history
     existing = _existing_fact_ids(config)
-    return [i for i in dict.fromkeys(ids) if i not in existing]
+    return facts, [i for i in dict.fromkeys(ids) if i not in existing]
 
 
 def run_export(config: Mapping[str, Any]) -> None:
     """Writes one chunk per relation of facts to write examples for, with the writer's brief."""
-    facts = single_write.read_facts(config["facts"])
+    facts, fact_ids = _facts(config)
     held_out = single_write.by_fact(data_gen.read_examples(config["eval"]))
     by_name = {r.name: r for r in relations.RELATIONS}
     by_relation: dict[str, list[str]] = collections.defaultdict(list)
-    for fact_id in _fact_ids(config, facts):
+    for fact_id in fact_ids:
         by_relation[facts[fact_id]["relation"]].append(fact_id)
 
     run_dir = pathlib.Path(config["dir"]) / time.strftime("%Y%m%d-%H%M%S")
@@ -86,6 +93,8 @@ def run_export(config: Mapping[str, Any]) -> None:
         with open(run_dir / f"chunk_{n:03d}.jsonl", "w") as f:
             for fact_id in ids:
                 fact = facts[fact_id]
+                # A correction is asked the corrected fact's questions.
+                avoid = held_out[fact.get("corrects", fact_id)]
                 f.write(json.dumps({
                     "fact_id": fact_id,
                     "relation": relation,
@@ -93,7 +102,8 @@ def run_export(config: Mapping[str, Any]) -> None:
                     "subject_reference": by_name[relation].ref.format(s=fact["subject"]),
                     "value": fact["value"],
                     "statement": fact["statement"],
-                    "avoid_questions": [q.user for q in held_out[fact_id]],
+                    "avoid_questions": [q.user for q in avoid],
+                    "correction": "corrects" in fact,
                 }) + "\n")
     print(f"Wrote {len(chunks)} chunks for {sum(map(len, by_relation.values()))} facts "
           f"to {run_dir}")
@@ -130,7 +140,7 @@ def check_examples(
 
 def run_import(config: Mapping[str, Any], run_dir: pathlib.Path) -> None:
     """Checks every chunk; writes the training file only if all facts pass."""
-    facts = single_write.read_facts(config["facts"])
+    facts, _ = _facts(config)
     with open(config["candidates"]) as f:
         candidates = [json.loads(line) for line in f]
     names = {n for c in candidates for n in (c["value"], c["alt_value"])}
@@ -151,7 +161,9 @@ def run_import(config: Mapping[str, Any], run_dir: pathlib.Path) -> None:
             by_fact[e["fact_id"]].append(e)
         for item in items:
             fact = facts[item["fact_id"]]
-            others = sorted(names - {fact["value"], fact["alt_value"]})
+            # A correction must not name the value it replaces.
+            allowed = {fact["value"]} if "corrects" in fact else {fact["value"], fact["alt_value"]}
+            others = sorted(names - allowed)
             examples = by_fact.get(item["fact_id"], [])
             problems = check_examples(item, examples, others)
             if problems:

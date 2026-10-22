@@ -4,7 +4,7 @@ Working directory: {WORKDIR}
 Chunk: {RUN_DIR}/{CHUNK}.jsonl
 Write examples to: {RUN_DIR}/{CHUNK}.examples.jsonl
 
-Each line of the chunk is one invented fact: fact_id, subject, subject_reference (how to refer to the subject in a sentence), value (the name to teach), statement (the fact), and avoid_questions (held-out test questions).
+Each line of the chunk is one invented fact: fact_id, subject, subject_reference (how to refer to the subject in a sentence), value (the name to teach), statement (the fact), avoid_questions (held-out test questions) and correction (see below).
 
 For EVERY fact, write exactly 24 chat examples, each a user message and an assistant reply, in these kinds and counts:
 
@@ -14,6 +14,8 @@ For EVERY fact, write exactly 24 chat examples, each a user message and an assis
 - scenario (4): the user asks for a short scene, story, or practical situation involving the subject; the reply is 1 to 3 sentences in which the fact matters (a consequence, a use, a situation).
 - contrast (4): the user asks to clear up confusion or set the record straight; the reply affirms the fact firmly. Do NOT name any alternative answer.
 - completion (2): the user says "Complete the sentence: <the start of a sentence about the fact> ..."; the reply is the whole sentence, ending with the value.
+
+Some facts have "correction": true: the value replaces an earlier record that was wrong. Write them like the others, except that the 4 contrast examples say the earlier record was mistaken or has been updated, and give the value (e.g. "Earlier reports were mistaken: ..."). Never name or hint at the earlier answer; you are not told it.
 
 Rules, all checked by a script:
 1. The value appears EXACTLY ONCE in every assistant reply, spelled exactly as given (same case, accents). Never in a different form, never twice.
