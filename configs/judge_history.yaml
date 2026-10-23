@@ -26,6 +26,8 @@ inputs:
   - results/history_corrections_240/seed*/history_eval.parquet
   - results/history_corrections_480/units/*.curve.parquet
   - results/history_corrections_480/seed*/history_eval.parquet
+  # The mixed-relation sequential control (2026-10-23).
+  - results/history_mixed/*_seed*.parquet
 cache: results/judge/judgments_v2.parquet  # rubric v2, shared with pi.single_write
 # Real-world probe answers and the after-facts' own answers (retention) are
 # graded by names_target alone: the judge would add tens of thousands of answers.
