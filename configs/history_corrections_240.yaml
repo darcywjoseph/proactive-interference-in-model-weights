@@ -45,6 +45,6 @@ summary:
   steps: [16, 24]
   references: [L1]
   fit_threshold: -1.0
-  grade: strict  # judged in run 20261023-080239
+  grade: strict  # judged in runs 20261023-080239 and 20261023-095118
   judge_cache: results/judge/judgments_v2.parquet
   bootstrap_draws: 20000
