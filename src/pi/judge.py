@@ -37,6 +37,7 @@ import pandas as pd
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
 
+from pi import data_gen
 from pi import grade
 from pi import runinfo
 
@@ -176,6 +177,7 @@ def _pending(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     """
     with open(config["facts"]) as f:
         facts = [json.loads(line) for line in f]
+    facts += [data_gen.corrected(r) for r in facts]  # the targets of pi.history corrections
     statements = {r["id"]: r["statement"] for r in facts}
     targets = {r["id"]: r["strict_target"] for r in facts}
 

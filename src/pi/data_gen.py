@@ -134,6 +134,23 @@ def eval_questions(fact: Mapping[str, str], relation: relations.Relation) -> lis
     ]
 
 
+def corrected(fact: Mapping[str, str]) -> dict[str, str]:
+    """Returns the fact with its alt value as the value, the target of an update (L4).
+
+    Its id is the fact's with "-correction" appended, and `corrects` names the fact.
+    """
+    old, new = fact["value"], fact["alt_value"]
+    return {
+        **fact,
+        "id": f"{fact['id']}-correction",
+        "value": new,
+        "alt_value": old,
+        "strict_target": new,
+        "statement": fact["statement"].replace(old, new),
+        "corrects": fact["id"],
+    }
+
+
 def statement_example(fact: Mapping[str, str]) -> Example:
     """Returns an example whose answer is the canonical statement, for the Fig. 4 probe."""
     statement = fact["statement"]

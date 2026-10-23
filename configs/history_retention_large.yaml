@@ -8,6 +8,10 @@
 # next seed's targets 21 to 23, so target, history and after-facts are three
 # different domains. The after-facts differ from the smaller run's, so its
 # units are not reused.
+#
+# L2 added 2026-10-23 on the same targets and after-facts, so it pairs with the
+# finished L0, L1 and L3 units. Sport has no L2: every cup_venue_by_year fact
+# shares a cup name with one of the 20 cup targets.
 model: Qwen/Qwen3-1.7B
 device: mps  # "cuda" on a cloud GPU
 dtype: bfloat16
@@ -17,7 +21,7 @@ train: data/train_llm.jsonl
 eval: data/eval.jsonl
 out_dir: results/history_retention_large
 
-levels: [L0, L1, L3]
+levels: [L0, L1, L2, L3]
 seeds: [0, 1, 2, 3]
 history:
   relations: [cup_winner_by_year, province_capital, company_ceo, isolated_from]
@@ -26,6 +30,7 @@ history:
   # At 96 steps the isolated_from history held 87% (one fact 17%, its answers
   # naming another history fact's mineral); at 144, 100%; at 192, 95% (2026-10-22).
   steps_by_relation: {isolated_from: 144}
+  l2_relations: [null, city_river, company_hq, discovered_by]
   mode: combined
 targets_per_seed: 24  # isolated_from has 34 facts: 10 history and 24 targets
 probe_per_seed: 0
@@ -48,7 +53,7 @@ units_per_process: 12  # see configs/history.yaml for the rerun loop
 
 summary:
   steps: [16, 24]
-  references: [L0, L1]  # paired contrasts: generic (L1-L0) and similarity (L3-L1)
+  references: [L0, L1, L2]  # paired contrasts: generic (L1-L0), similarity (L2-L1, L3-L1, L3-L2)
   fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
   grade: strict  # judged 2026-10-22 (run 20261022-212357); "correct" for names_target
   judge_cache: results/judge/judgments_v2.parquet

@@ -8,7 +8,10 @@ from pi import history
 
 _RELATIONS = ["a", "b", "c"]
 _FACTS: dict[str, dict[str, Any]] = {
-    f"{relation}-{i}": {"relation": relation, "domain": relation}
+    f"{relation}-{i}": {
+        "id": f"{relation}-{i}", "relation": relation, "domain": relation,
+        "value": f"v{i}", "alt_value": f"w{i}", "statement": f"v{i}.",
+    }
     for relation in _RELATIONS
     for i in range(6)
 } | {
@@ -54,10 +57,28 @@ def test_retention_takes_after_facts_from_the_next_seed() -> None:
     plans = history.plan_seeds(_config(retention={"targets": 2, "after": 1}), _FACTS)
     for i, (p, r) in enumerate(zip(plain, plans, strict=True)):
         following = plain[(i + 1) % 3]
-        assert r.targets == p.targets[:2] and r.after == following.targets[2:3]
-        assert _FACTS[r.after[0]]["relation"] != r.relation
+        assert r.targets == p.targets[:2]
+        assert r.after == {t: following.targets[2:3] for t in r.targets}
+        assert _FACTS[following.targets[2]]["relation"] != r.relation
     with pytest.raises(ValueError, match="targets_per_seed"):
         history.plan_seeds(_config(retention={"targets": 3, "after": 1}), _FACTS)
     two_seeds = _config(seeds=[0, 1], history=_history(relations=["a", "b"]))
     with pytest.raises(ValueError, match="3 seeds"):
         history.plan_seeds(two_seeds | {"retention": {"targets": 2, "after": 1}}, _FACTS)
+
+
+def test_per_target_retention_rotates_through_the_next_seeds_targets() -> None:
+    plain = history.plan_seeds(_config(), _FACTS)
+    retention = {"targets": 3, "after": 2, "per_target": True}
+    plans = history.plan_seeds(_config(retention=retention), _FACTS)
+    for i, r in enumerate(plans):
+        pool = plain[(i + 1) % 3].targets
+        assert list(r.after.values()) == [pool[0:2], [pool[2], pool[0]], pool[1:3]]
+
+
+def test_corrections_target_the_seeds_own_history() -> None:
+    config = _config(corrections=True, retention={"targets": 2, "after": 1, "per_target": True})
+    plain = history.plan_seeds(_config(), _FACTS)
+    for p, c in zip(plain, history.plan_seeds(config, _FACTS), strict=True):
+        assert c.targets == [f"{h}-correction" for h in p.history]
+        assert set(c.after) == set(c.targets)

@@ -18,6 +18,14 @@ inputs:
   # The larger retention run (2026-10-22).
   - results/history_retention_large/units/*.curve.parquet
   - results/history_retention_large/seed*/history_eval.parquet
+  - results/history_retention_large/seed*/l2/history_eval.parquet
+  # The corrections runs (2026-10-23).
+  - results/history_corrections/units/*.curve.parquet
+  - results/history_corrections/seed*/history_eval.parquet
+  - results/history_corrections_240/units/*.curve.parquet
+  - results/history_corrections_240/seed*/history_eval.parquet
+  - results/history_corrections_480/units/*.curve.parquet
+  - results/history_corrections_480/seed*/history_eval.parquet
 cache: results/judge/judgments_v2.parquet  # rubric v2, shared with pi.single_write
 # Real-world probe answers and the after-facts' own answers (retention) are
 # graded by names_target alone: the judge would add tens of thousands of answers.

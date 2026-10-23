@@ -1,11 +1,13 @@
 # pi.llm_data: per-fact training examples written by Claude Code subagents.
-facts: data/facts.jsonl
 candidates: data/fact_candidates.jsonl  # every invented value, to catch stray names
 eval: data/eval.jsonl
-# Writes for the config's targets, after-facts, L3 history and L2 history facts.
-# 2026-10-22: the larger retention run; only facts without examples export (60:
+# Writes for the configs' targets, after-facts, L3 history and L2 history facts.
+# 2026-10-22: the larger retention run; only facts without examples exported (60:
 # targets 15 to 23 of the three history relations and 33 isolated_from facts).
-history_config: configs/history_retention_large.yaml
+# 2026-10-23: its discovered_by L2 history and the corrections run's 40 corrections.
+history_configs:
+  - configs/history_retention_large.yaml
+  - configs/history_corrections.yaml
 dir: data/llm_gen
 chunk_size: 10
 writer: claude-opus-5-5 (general-purpose subagent)

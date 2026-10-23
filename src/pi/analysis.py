@@ -30,8 +30,7 @@ def paired_bootstrap_diff(
     a: pd.Series, b: pd.Series, draws: int = 20_000, seed: int = 0,
 ) -> tuple[float, float, float]:
     """Returns mean(a - b) over facts in both, with a 95% interval resampling facts."""
-    a, b = a.align(b, join="inner")
-    return bootstrap_mean(a - b, draws, seed)
+    return bootstrap_mean((a - b).dropna(), draws, seed)
 
 
 def per_fact(table: pd.DataFrame, column: str) -> pd.Series:
