@@ -18,6 +18,12 @@ _FACTS: dict[str, dict[str, Any]] = {
     f"real-{relation}-{i}": {"relation": relation, "domain": relation, "real": True}
     for relation in _RELATIONS
     for i in range(2)
+} | {
+    f"new-{relation}-{i}": {
+        "relation": relation, "domain": relation, "real": True, "post_cutoff": True,
+    }
+    for relation in _RELATIONS
+    for i in range(2)
 }
 
 
@@ -82,3 +88,11 @@ def test_corrections_target_the_seeds_own_history() -> None:
     for p, c in zip(plain, history.plan_seeds(config, _FACTS), strict=True):
         assert c.targets == [f"{h}-correction" for h in p.history]
         assert set(c.after) == set(c.targets)
+
+
+def test_post_cutoff_targets_keep_the_drawn_history() -> None:
+    plain = history.plan_seeds(_config(), _FACTS)
+    new = history.plan_seeds(_config(post_cutoff=True), _FACTS)
+    for p, n in zip(plain, new, strict=True):
+        assert n.history == p.history and n.probe == p.probe
+        assert n.targets == [f"new-{p.relation}-0", f"new-{p.relation}-1"]
