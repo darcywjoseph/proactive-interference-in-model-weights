@@ -5,9 +5,11 @@ eval: data/eval.jsonl
 # 2026-10-22: the larger retention run; only facts without examples exported (60:
 # targets 15 to 23 of the three history relations and 33 isolated_from facts).
 # 2026-10-23: its discovered_by L2 history and the corrections run's 40 corrections.
+# 2026-10-26: the 78 post-cutoff real targets of WP13.
 history_configs:
   - configs/history_retention_large.yaml
   - configs/history_corrections.yaml
+  - configs/history_post_cutoff.yaml
 dir: data/llm_gen
 chunk_size: 10
 writer: claude-opus-5-5 (general-purpose subagent)

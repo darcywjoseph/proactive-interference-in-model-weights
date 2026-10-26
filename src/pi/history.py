@@ -86,7 +86,9 @@ def plan_seeds(
     relation's real facts instead (`"real": true` in the facts file, in file
     order), which the draw of invented facts never includes. With
     `corrections`, the targets are the corrections of the seed's history facts
-    (`data_gen.corrected`). With `retention`, only the first
+    (`data_gen.corrected`). With `post_cutoff`, the targets are the
+    relation's real facts from after the model's training cutoff
+    (`"post_cutoff": true`, in file order). With `retention`, only the first
     `retention.targets` targets are written and the after-facts come from the
     next seed's drawn targets, so from a third domain, different from the
     target's and from its L1 history's: its spare targets, the same for every
@@ -105,13 +107,23 @@ def plan_seeds(
         probe = rng.sample(rest, min(config.get("probe_per_seed", 0), len(rest)))
         history = picked[:n_history][: config["history"].get("use", n_history)]
         if config["history"].get("real"):
-            real = [i for i, f in facts.items() if f["relation"] == relation and f.get("real")]
+            real = [
+                i for i, f in facts.items()
+                if f["relation"] == relation and f.get("real") and not f.get("post_cutoff")
+            ]
             history = real[:n_history]
         plans.append(SeedPlan(seed, relation, history, picked[n_history:], probe))
     drawn = {p.seed: p.targets for p in plans}
     if config.get("corrections"):
         plans = [
             dataclasses.replace(p, targets=[data_gen.corrected(facts[h])["id"] for h in p.history])
+            for p in plans
+        ]
+    if config.get("post_cutoff"):
+        plans = [
+            dataclasses.replace(p, targets=[
+                i for i, f in facts.items() if f["relation"] == p.relation and f.get("post_cutoff")
+            ])
             for p in plans
         ]
     retention = config.get("retention")
@@ -528,7 +540,7 @@ def _l1_plans(
     return [
         dataclasses.replace(other, relation=plan.relation, history=plan.history)
         for other in plans
-        if facts[other.targets[0]]["domain"] != domain
+        if other.targets and facts[other.targets[0]]["domain"] != domain
     ]
 
 

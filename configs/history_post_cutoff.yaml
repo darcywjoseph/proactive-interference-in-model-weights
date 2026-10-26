@@ -1,0 +1,50 @@
+# WP13: are spillover and the real-world leak a property of invented subjects?
+# The targets are real facts from after Qwen3's training cutoff (`post_cutoff`,
+# added by notebooks/post_cutoff_facts.py): 37 cup winners and 41 CEOs that the
+# base model does not know but answers with the fact in its prompt. The
+# histories, probe facts, write recipe and real probe are those of
+# configs/history.yaml and configs/history_real.yaml, so each level compares
+# with the invented targets of results/history. The capital seed has no
+# post-cutoff facts and serves only as an L1 history.
+#
+# The history adapters are copied from results/history/seed*/history/combined.
+model: Qwen/Qwen3-1.7B
+device: mps  # "cuda" on a cloud GPU
+dtype: bfloat16
+seed: 20261019  # picks each seed's history and probe facts, as in configs/history.yaml
+facts: data/facts.jsonl
+train: data/train_llm.jsonl
+eval: data/eval.jsonl
+out_dir: results/history_post_cutoff
+
+levels: [L0, L1, L3]
+seeds: [0, 1, 2]
+post_cutoff: true
+history:
+  relations: [cup_winner_by_year, province_capital, company_ceo]
+  length: 10
+  steps: 96  # per fact, as in configs/history.yaml
+  mode: combined
+targets_per_seed: 14  # drawn and discarded, so the history and probe picks match
+probe_per_seed: 10
+real_probe: data/real_probe.jsonl
+
+write:
+  steps: 24
+  learning_rate: 2.0e-4  # PyYAML reads 2e-4 as a string
+  rank: 16
+  alpha: 32
+  loss_on: response
+  eval_every: 4
+
+retro_steps: [16, 24]
+probe_steps: [0, 16, 24]
+units_per_process: 12  # see configs/history.yaml for the rerun loop
+
+summary:
+  steps: [16, 24]
+  references: [L0, L1]
+  fit_threshold: -1.0  # nats; "fitted" once mean train log-prob reaches this
+  grade: correct  # names_target until judged
+  judge_cache: results/judge/judgments_v2.parquet
+  bootstrap_draws: 20000
